@@ -1,7 +1,23 @@
-# OpenStarbound
+# OpenStarbound (aziogroup fork)
+
+This is a personal fork of [OpenStarbound](https://github.com/OpenStarbound/OpenStarbound) with the following enhancements:
+
+### 120FPS Decoupled Rendering
+- Render loop decoupled from the game tick rate, enabling smooth 120fps+ output
+- Camera and entity interpolation for jitter-free visuals at high frame rates
+
+### Graphics Enhancement Post-Processing
+- **Bloom**: Multi-pass Gaussian bloom with configurable threshold and intensity
+- **GPU Ray-Marched Shadows**: Real-time 2D shadow casting from light sources
+- **Ambient Occlusion (AO)**: Screen-space AO for added depth
+- **Color Bleed**: Light color bleeding for richer lighting
+
+All post-processing effects are configurable via the F3 debug window (ImGui).
+
+---
 
 <details>
-<summary><b>What is this?</b></summary>
+<summary><b>What is OpenStarbound?</b></summary>
  
 tl;dr: **OpenStarbound** is a mod of the latest version of Starbound, 1.4.4. It fixes many bugs, adds many new features and improves performance.
 
