@@ -724,6 +724,8 @@ public:
 
       m_updateTicker.reset();
       m_renderTicker.reset();
+      m_lastUpdateTime = Time::monotonicTime();
+      m_updateInterval = 1.0 / m_updateTicker.targetTickRate();
 
       bool quit = false;
       while (true) {
@@ -745,8 +747,12 @@ public:
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplSDL3_NewFrame();
 
-        int updatesBehind = max<int>(round(m_updateTicker.ticksBehind()), 1);
+        bool decoupledRender = (m_targetRenderRate > 0.0f);
+        int minUpdates = decoupledRender ? 0 : 1;
+        int updatesBehind = max<int>(round(m_updateTicker.ticksBehind()), minUpdates);
         updatesBehind = min<int>(updatesBehind, m_maxFrameSkip + 1);
+
+        bool didUpdate = (updatesBehind > 0);
         for (int i = 0; i < updatesBehind; ++i) {
           //since frame-skipping is a thing, we have to begin a new ImGui frame here to prevent duplicate elements made by updates
           if (i != 0)
@@ -754,6 +760,27 @@ public:
           ImGui::NewFrame();
           m_application->update();
           m_updateRate = m_updateTicker.tick();
+        }
+
+        // Track timestamp of last update for interpolation alpha
+        if (didUpdate) {
+          m_lastUpdateTime = Time::monotonicTime();
+          m_updateInterval = 1.0 / m_updateTicker.targetTickRate();
+        }
+
+        // When no update ran, ImGui still needs a frame
+        if (!didUpdate)
+          ImGui::NewFrame();
+
+        // Compute interpolation alpha from wall-clock time since last update.
+        // ticksAhead()/ticksBehind() measure rate deviation (moving average),
+        // not sub-tick phase position, so they always return ~0 in steady state.
+        if (decoupledRender) {
+          double now = Time::monotonicTime();
+          double elapsed = now - m_lastUpdateTime;
+          m_interpolationAlpha = clamp<float>((float)(elapsed / m_updateInterval), 0.0f, 1.0f);
+        } else {
+          m_interpolationAlpha = 0.0f;
         }
 
         m_renderer->startFrame();
@@ -780,9 +807,18 @@ public:
           break;
         }
 
-        int64_t spareMilliseconds = round(m_updateTicker.spareTime() * 1000);
-        if (spareMilliseconds > 0)
-          Thread::sleepPrecise(spareMilliseconds);
+        if (decoupledRender) {
+          double updateSpare = m_updateTicker.spareTime();
+          double renderSpare = m_renderLimiter.spareTime();
+          int64_t spareMs = round(min(updateSpare, renderSpare) * 1000);
+          if (spareMs > 0)
+            Thread::sleepPrecise(spareMs);
+          m_renderLimiter.tick();
+        } else {
+          int64_t spareMilliseconds = round(m_updateTicker.spareTime() * 1000);
+          if (spareMilliseconds > 0)
+            Thread::sleepPrecise(spareMilliseconds);
+        }
       }
     } catch (std::exception const& e) {
       Logger::error("Application: exception thrown!");
@@ -973,6 +1009,20 @@ private:
 
     void setMaxFrameSkip(unsigned maxFrameSkip) override {
       parent->m_maxFrameSkip = maxFrameSkip;
+    }
+
+    void setTargetRenderRate(float rate) override {
+      parent->m_targetRenderRate = rate;
+      if (rate > 0.0f)
+        parent->m_renderLimiter.setTargetTickRate(rate);
+    }
+
+    float targetRenderRate() const override {
+      return parent->m_targetRenderRate;
+    }
+
+    float interpolationAlpha() const override {
+      return parent->m_interpolationAlpha;
     }
 
     void setCursorVisible(bool cursorVisible) override {
@@ -1320,6 +1370,11 @@ private:
   float m_updateRate = 0.0f;
   TickRateMonitor m_renderTicker = TickRateMonitor(1.0f);
   float m_renderRate = 0.0f;
+  TickRateApproacher m_renderLimiter = TickRateApproacher(120.0f, 1.0f);
+  float m_targetRenderRate = 0.0f;
+  float m_interpolationAlpha = 0.0f;
+  double m_lastUpdateTime = 0.0;
+  double m_updateInterval = 1.0 / 60.0;
 
   SDL_Window* m_sdlWindow = nullptr;
   SDL_GLContext m_sdlGlContext = nullptr;
