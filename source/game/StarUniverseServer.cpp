@@ -106,6 +106,20 @@ UniverseServer::~UniverseServer() {
   m_connectionServer->removeAllConnections();
   m_deadConnections.clear();
 
+  // Safely finish any pending accept threads, catching exceptions that would
+  // otherwise be rethrown by ~ThreadFunction and cause abort().
+  {
+    RecursiveMutexLocker acceptThreadsLocker(m_connectionAcceptThreadsMutex);
+    for (auto& thread : m_connectionAcceptThreads) {
+      try {
+        thread.finish();
+      } catch (std::exception const& e) {
+        Logger::error("UniverseServer: Exception caught cleaning up connection thread: {}", outputException(e, true));
+      }
+    }
+    m_connectionAcceptThreads.clear();
+  }
+
   // Make sure that all world threads and net sockets (and associated threads)
   // are shutdown before other member destruction.
   m_clients.clear();

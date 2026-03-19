@@ -96,12 +96,13 @@ void LocalPacketSocket::sendPackets(List<PacketPtr> packets) {
 #ifdef STAR_DEBUG
     // Test serialization if STAR_DEBUG is enabled
     DataStreamBuffer buffer;
+    auto rules = netRules();
     for (auto inPacket : take(packets)) {
       buffer.clear();
-      inPacket->write(buffer);
+      inPacket->write(buffer, rules);
       auto outPacket = createPacket(inPacket->type());
       buffer.seek(0);
-      outPacket->read(buffer);
+      outPacket->read(buffer, rules);
       packets.append(outPacket);
     }
 #endif
