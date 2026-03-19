@@ -180,6 +180,9 @@ private:
     GLuint id = 0;
     RefPtr<GlLoneTexture> texture;
 
+    GLuint resolveId = 0;
+    RefPtr<GlLoneTexture> resolveTexture;
+
     Json config;
     bool blitted = false;
     unsigned multisample = 0;

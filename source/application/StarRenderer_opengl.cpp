@@ -203,20 +203,57 @@ OpenGlRenderer::GlFrameBuffer::GlFrameBuffer(Json const& fbConfig) : config(fbCo
   auto framebufferStatus = glCheckFramebufferStatus(GL_FRAMEBUFFER);
   if (framebufferStatus != GL_FRAMEBUFFER_COMPLETE)
     throw RendererException("OpenGL framebuffer is not complete!");
+
+  if (multisample) {
+    resolveTexture = make_ref<GlLoneTexture>();
+    resolveTexture->textureFiltering = TextureFiltering::Nearest;
+    resolveTexture->textureAddressing = TextureAddressing::Clamp;
+    resolveTexture->textureSize = size;
+    glGenTextures(1, &resolveTexture->textureId);
+    glBindTexture(GL_TEXTURE_2D, resolveTexture->textureId);
+    glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, size[0], size[1], 0, glFormat, glType, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    if (filtering == TextureFiltering::Nearest) {
+      glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+      glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    } else {
+      glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+      glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    }
+
+    glGenFramebuffers(1, &resolveId);
+    glBindFramebuffer(GL_FRAMEBUFFER, resolveId);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, resolveTexture->glTextureId(), 0);
+
+    auto resolveStatus = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (resolveStatus != GL_FRAMEBUFFER_COMPLETE)
+      throw RendererException("OpenGL resolve framebuffer is not complete!");
+  }
 }
 
 
 OpenGlRenderer::GlFrameBuffer::~GlFrameBuffer() {
   glDeleteFramebuffers(1, &id);
   texture.reset();
+  if (resolveId) {
+    glDeleteFramebuffers(1, &resolveId);
+    resolveTexture.reset();
+  }
 }
 
 void OpenGlRenderer::loadConfig(Json const& config) {
   m_frameBuffers.clear();
 
+  for (auto& effect : m_effects) {
+    for (auto& tex : effect.second.textures)
+      tex.second.textureValue.reset();
+  }
+
   for (auto& pair : config.getObject("frameBuffers", {})) {
     Json config = pair.second;
-    config = config.set("multisample", m_multiSampling);
+    if (!config.getBool("noMultisample", false))
+      config = config.set("multisample", m_multiSampling);
     Logger::info("Creating framebuffer {}", pair.first);
     m_frameBuffers[pair.first] = make_ref<GlFrameBuffer>(config);
 
@@ -514,8 +551,20 @@ bool OpenGlRenderer::switchEffectConfig(String const& name) {
         auto textureUniform = fbt.getString("texture");
         auto ptr = m_currentEffect->textures.ptr(textureUniform);
         if (ptr) {
-          if (!ptr->textureValue || ptr->textureValue->textureId == 0) {  
-            auto texture = getGlFrameBuffer(*frameBufferId)->texture;
+          auto fb = getGlFrameBuffer(*frameBufferId);
+
+          if (fb->multisample && fb->resolveId) {
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, fb->id);
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fb->resolveId);
+            auto resolveSize = m_screenSize / fb->sizeDiv;
+            glBlitFramebuffer(0, 0, resolveSize[0], resolveSize[1],
+                0, 0, resolveSize[0], resolveSize[1],
+                GL_COLOR_BUFFER_BIT, GL_NEAREST);
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_currentFrameBuffer ? m_currentFrameBuffer->id : 0);
+          }
+
+          if (!ptr->textureValue || ptr->textureValue->textureId == 0) {
+            auto texture = (fb->multisample && fb->resolveTexture) ? fb->resolveTexture : fb->texture;
             ptr->textureValue = texture;
             if (ptr->textureSizeUniform != -1) {
               auto textureSize = ptr->textureValue->glTextureSize();
@@ -625,12 +674,20 @@ void OpenGlRenderer::setScreenSize(Vec2U screenSize) {
 
   for (auto& frameBuffer : m_frameBuffers) {
     unsigned sizeDiv = frameBuffer.second->sizeDiv;
+    Vec2U fbSize = Vec2U(m_screenSize[0] / sizeDiv, m_screenSize[1] / sizeDiv);
     if (unsigned multisample = frameBuffer.second->multisample) {
       glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, frameBuffer.second->texture->glTextureId());
-      glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, multisample, GL_RGBA8, m_screenSize[0] / sizeDiv, m_screenSize[1] / sizeDiv, GL_TRUE);
+      glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, multisample, GL_RGBA8, fbSize[0], fbSize[1], GL_TRUE);
+
+      if (frameBuffer.second->resolveTexture) {
+        glBindTexture(GL_TEXTURE_2D, frameBuffer.second->resolveTexture->glTextureId());
+        glTexImage2D(GL_TEXTURE_2D, 0, frameBuffer.second->internalFormat,
+            fbSize[0], fbSize[1], 0,
+            frameBuffer.second->glFormat, frameBuffer.second->glType, NULL);
+        frameBuffer.second->resolveTexture->textureSize = fbSize;
+      }
     } else {
       glBindTexture(GL_TEXTURE_2D, frameBuffer.second->texture->glTextureId());
-      Vec2U fbSize = Vec2U(m_screenSize[0] / sizeDiv, m_screenSize[1] / sizeDiv);
       glTexImage2D(GL_TEXTURE_2D, 0, frameBuffer.second->internalFormat,
           fbSize[0], fbSize[1], 0,
           frameBuffer.second->glFormat, frameBuffer.second->glType, NULL);
