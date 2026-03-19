@@ -76,6 +76,7 @@ Json const AdditionalDefaultConfiguration = Json::parseJson(R"JSON(
       "antiAliasing" : false,
       "zoomLevel" : 3.0,
       "cameraSpeedFactor" : 1.0,
+      "cursorScale" : 1.0,
       "interfaceScale" : 0,
       "speechBubbles" : true,
 
@@ -590,6 +591,16 @@ void ClientApplication::render() {
           bool entityInterp = config->get("entityInterpolation").optBool().value(true);
           if (ImGui::Checkbox("Entity Interpolation", &entityInterp))
             config->set("entityInterpolation", entityInterp);
+        }
+
+        ImGui::Separator();
+
+        // Cursor Scale
+        {
+          auto config = m_root->configuration();
+          float cursorScaleVal = config->get("cursorScale").optFloat().value(1.0f);
+          if (ImGui::SliderFloat("Cursor Scale", &cursorScaleVal, 0.5f, 4.0f, "%.1fx"))
+            config->set("cursorScale", cursorScaleVal);
         }
 
         ImGui::Separator();

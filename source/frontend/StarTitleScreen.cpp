@@ -538,7 +538,8 @@ void TitleScreen::renderCursor() {
   Vec2I cursorPos = m_cursorScreenPos;
   Vec2I cursorSize = m_cursor.size();
   Vec2I cursorOffset = m_cursor.offset();
-  float cursorScale = m_cursor.scale(interfaceScale());
+  float cursorScale = m_cursor.scale(interfaceScale())
+      * Root::singleton().configuration()->get("cursorScale").optFloat().value(1.0f);
   Drawable cursorDrawable = m_cursor.drawable();
 
   cursorPos[0] -= cursorOffset[0] * cursorScale;
