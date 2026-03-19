@@ -4,6 +4,7 @@
 #include "StarConfiguration.hpp"
 #include "StarAssets.hpp"
 #include "StarJsonExtra.hpp"
+#include "StarGpuLighting.hpp"
 
 namespace Star {
 
@@ -34,6 +35,7 @@ void WorldPainter::renderInit(RendererPtr renderer) {
   m_tilePainter = make_shared<TilePainter>(m_renderer);
   m_drawablePainter = make_shared<DrawablePainter>(m_renderer, make_shared<AssetTextureGroup>(textureGroup));
   m_environmentPainter = make_shared<EnvironmentPainter>(m_renderer);
+  m_gpuLighting = make_shared<GpuLighting>();
 }
 
 void WorldPainter::setCameraPosition(WorldGeometry const& geometry, Vec2F const& position) {
@@ -90,7 +92,36 @@ void WorldPainter::render(WorldRenderData& renderData, function<bool()> lightWai
     m_renderer->setEffectParameter("lightMapMultiplier", m_assets->json("/rendering.config:lightMapMultiplier").toFloat());
     m_renderer->setEffectParameter("lightMapScale", Vec2F::filled(TilePixels * m_camera.pixelRatio()));
     m_renderer->setEffectParameter("lightMapOffset", m_camera.worldToScreen(Vec2F(renderData.lightMinPosition)));
+    m_renderer->setEffectParameter("lightMapWorldOrigin", Vec2F(renderData.lightMinPosition));
   }
+
+  // GPU lighting - ray-march shadows that modulate CPU lightmap
+  bool gpuLightingEnabled = Root::singleton().configuration()->get("gpuLightingEnabled").optBool().value(true);
+  if (gpuLightingEnabled && !renderData.isFullbright && !renderData.lightSources.empty()) {
+    m_gpuLighting->update(renderData, renderData.lightSources,
+        m_camera.centerWorldPosition(), m_camera.pixelRatio(), m_camera.screenSize());
+    m_gpuLighting->uploadToRenderer(m_renderer);
+
+    m_renderer->setEffectParameter("gpuLightingEnabled", true);
+    m_renderer->setEffectParameter("lightCount", (int)m_gpuLighting->lightCount());
+    m_renderer->setEffectParameter("occlusionOffset", m_gpuLighting->occlusionOffset());
+  } else {
+    m_renderer->setEffectParameter("gpuLightingEnabled", false);
+  }
+
+  // Weather uniforms for the world effect
+  m_renderer->setEffectParameter("weatherIntensity", renderData.weatherIntensity);
+  m_renderer->setEffectParameter("windStrength", renderData.windStrength);
+  m_renderer->setEffectParameter("dayLevel", renderData.dayLevel);
+  m_renderer->setEffectParameter("gameTime", renderData.gameTime);
+
+  // Also set weather data as scriptable params on post-process effects
+  m_renderer->setEffectScriptableParameter("bloom_composite", "weatherIntensity", renderData.weatherIntensity);
+  m_renderer->setEffectScriptableParameter("bloom_composite", "windStrength", renderData.windStrength);
+  m_renderer->setEffectScriptableParameter("bloom_composite", "dayLevel", renderData.dayLevel);
+  m_renderer->setEffectScriptableParameter("bloom_composite", "gameTime", renderData.gameTime);
+  m_renderer->setEffectScriptableParameter("godrays", "dayLevel", renderData.dayLevel);
+  m_renderer->setEffectScriptableParameter("godrays", "gameTime", renderData.gameTime);
 
   // Parallax layers
 

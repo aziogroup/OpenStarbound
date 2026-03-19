@@ -37,8 +37,8 @@ void HttpTrustDialog::displayRequest(String const& domain, function<void(HttpTru
   fetchChild<LabelWidget>("domain")->setText(message);
   // fetchChild<ButtonWidget>("yes")->setText("Allow");
   // fetchChild<ButtonWidget>("no")->setText("Deny"); // I did it cuz of: if some smart guy will swap yes/no buttons texts in the config file
-  fetchChild<ButtonWidget>("yes")->setText("✅");
-  fetchChild<ButtonWidget>("no")->setText("❌"); // Emoji buttons dont need to be translated
+  fetchChild<ButtonWidget>("yes")->setText("\xe2\x9c\x85");
+  fetchChild<ButtonWidget>("no")->setText("\xe2\x9d\x8c"); // Emoji buttons dont need to be translated
 
   show();
 }

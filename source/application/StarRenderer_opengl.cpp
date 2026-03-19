@@ -158,10 +158,21 @@ OpenGlRenderer::GlFrameBuffer::GlFrameBuffer(Json const& fbConfig) : config(fbCo
   sizeDiv = config.getUInt("sizeDiv", 1);
   Vec2U size = jsonToVec2U(config.getArray("size", { 256, 256 })) / sizeDiv;
 
+  String formatStr = config.getString("internalFormat", "rgb");
+  if (formatStr == "rgba16f") {
+    internalFormat = GL_RGBA16F; glFormat = GL_RGBA; glType = GL_FLOAT;
+  } else if (formatStr == "rgb16f") {
+    internalFormat = GL_RGB16F; glFormat = GL_RGB; glType = GL_FLOAT;
+  } else if (formatStr == "rgba8") {
+    internalFormat = GL_RGBA8; glFormat = GL_RGBA; glType = GL_UNSIGNED_BYTE;
+  } else {
+    internalFormat = GL_RGB; glFormat = GL_RGB; glType = GL_UNSIGNED_BYTE;
+  }
+
   if (multisample)
     glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, multisample, GL_RGBA8, size[0], size[1], GL_TRUE);
   else {
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, size[0], size[1], 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, size[0], size[1], 0, glFormat, glType, NULL);
   }
   auto addressing = TextureAddressingNames.getLeft(config.getString("textureAddressing", "clamp"));
   auto filtering = TextureFilteringNames.getLeft(config.getString("textureFiltering", "nearest"));
@@ -485,9 +496,11 @@ bool OpenGlRenderer::switchEffectConfig(String const& name) {
     auto buf = getGlFrameBuffer(*frameBufferId);
     switchGlFrameBuffer(buf);
     effectScreenSize = m_screenSize / (buf->sizeDiv);
+    glViewport(0, 0, effectScreenSize[0], effectScreenSize[1]);
   } else {
     m_currentFrameBuffer.reset();
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    glViewport(0, 0, m_screenSize[0], m_screenSize[1]);
   }
 
   glUseProgram(m_program = effect.program);
@@ -617,7 +630,11 @@ void OpenGlRenderer::setScreenSize(Vec2U screenSize) {
       glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, multisample, GL_RGBA8, m_screenSize[0] / sizeDiv, m_screenSize[1] / sizeDiv, GL_TRUE);
     } else {
       glBindTexture(GL_TEXTURE_2D, frameBuffer.second->texture->glTextureId());
-      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, m_screenSize[0] / sizeDiv, m_screenSize[1] / sizeDiv, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+      Vec2U fbSize = Vec2U(m_screenSize[0] / sizeDiv, m_screenSize[1] / sizeDiv);
+      glTexImage2D(GL_TEXTURE_2D, 0, frameBuffer.second->internalFormat,
+          fbSize[0], fbSize[1], 0,
+          frameBuffer.second->glFormat, frameBuffer.second->glType, NULL);
+      frameBuffer.second->texture->textureSize = fbSize;
     }
   }
 }

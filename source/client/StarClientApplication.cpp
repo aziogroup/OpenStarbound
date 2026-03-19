@@ -482,6 +482,66 @@ void ClientApplication::render() {
     LogMap::set("client_render_interface", strf(u8"{:05d}\u00b5s", Time::monotonicMicroseconds() - start));
   }
 
+  // Graphics Enhancement Debug Window (F3 to toggle)
+  {
+    static bool showDebugWindow = false;
+    if (ImGui::IsKeyPressed(ImGuiKey_F3, false))
+      showDebugWindow = !showDebugWindow;
+
+    if (showDebugWindow) {
+      ImGui::SetNextWindowSize(ImVec2(320, 200), ImGuiCond_FirstUseEver);
+      if (ImGui::Begin("Graphics Enhancements", &showDebugWindow)) {
+        auto config = m_root->configuration();
+
+        // GPU Lighting
+        bool gpuLighting = config->get("gpuLightingEnabled").optBool().value(true);
+        if (ImGui::Checkbox("GPU Ray-March Shadows", &gpuLighting))
+          config->set("gpuLightingEnabled", gpuLighting);
+
+        ImGui::Separator();
+
+        // Bloom
+        bool bloomEnabled = m_postProcessGroups.contains("bloom") && m_postProcessGroups.get("bloom").enabled;
+        if (ImGui::Checkbox("Bloom", &bloomEnabled)) {
+          if (m_postProcessGroups.contains("bloom"))
+            m_postProcessGroups.get("bloom").enabled = bloomEnabled;
+        }
+
+        if (bloomEnabled) {
+          auto& renderer = Application::renderer();
+          static float bloomThreshold = 0.7f;
+          static float bloomIntensity = 0.15f;
+          if (ImGui::SliderFloat("Threshold", &bloomThreshold, 0.1f, 2.0f, "%.2f"))
+            renderer->setEffectScriptableParameter("bloom_extract", "bloomThreshold", bloomThreshold);
+          if (ImGui::SliderFloat("Intensity", &bloomIntensity, 0.0f, 1.0f, "%.2f"))
+            renderer->setEffectScriptableParameter("bloom_composite", "bloomIntensity", bloomIntensity);
+        }
+
+        ImGui::Separator();
+
+        // Ambient Occlusion
+        {
+          auto& renderer = Application::renderer();
+          static float aoIntensity = 0.5f;
+          if (ImGui::SliderFloat("Ambient Occlusion", &aoIntensity, 0.0f, 2.0f, "%.2f"))
+            renderer->setEffectScriptableParameter("bloom_composite", "aoIntensity", aoIntensity);
+        }
+
+        // Color Bleeding
+        {
+          auto& renderer = Application::renderer();
+          static float colorBleedIntensity = 0.5f;
+          if (ImGui::SliderFloat("Color Bleed", &colorBleedIntensity, 0.0f, 2.0f, "%.2f"))
+            renderer->setEffectScriptableParameter("bloom_composite", "colorBleedIntensity", colorBleedIntensity);
+        }
+
+        ImGui::Separator();
+        ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Press F3 to toggle this window");
+      }
+      ImGui::End();
+    }
+  }
+
   if (!m_errorScreen->accepted())
     m_errorScreen->render();
 }

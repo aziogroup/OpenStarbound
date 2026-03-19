@@ -34,6 +34,11 @@ public:
 
   static Image filled(Vec2U size, Vec4B color, PixelFormat pf = PixelFormat::RGBA32);
 
+  // Generate a normal map from an albedo image using Sobel filter.
+  // Interprets luminance as height and computes surface normals.
+  // strength controls the intensity of the normal mapping effect.
+  static Image generateNormalMap(Image const& albedo, float strength = 1.0f);
+
   // Creates a zero size image
   Image(PixelFormat pf = PixelFormat::RGBA32);
   Image(Vec2U size, PixelFormat pf = PixelFormat::RGBA32);

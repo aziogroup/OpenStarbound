@@ -10,6 +10,7 @@
 #include "StarEntity.hpp"
 #include "StarThread.hpp"
 #include "StarCellularLighting.hpp"
+#include "StarLightSource.hpp"
 
 namespace Star {
 
@@ -45,6 +46,18 @@ struct WorldRenderData {
   bool isFullbright = false;
   float dimLevel = 0.0f;
   Vec3B dimColor;
+
+  // GPU lighting data
+  List<LightSource> lightSources;
+
+  // Weather/atmosphere data for shader pipeline
+  float weatherIntensity = 0.0f;
+  float windStrength = 0.0f;
+  float undergroundLevel = 0.0f;
+  float gameTime = 0.0f;
+  float dayLevel = 1.0f;
+  Vec3F environmentLight = Vec3F(1.0f, 1.0f, 1.0f);
+  Vec2F sunScreenPosition;
 };
 
 inline void WorldRenderData::clear() {
@@ -57,6 +70,7 @@ inline void WorldRenderData::clear() {
   backgroundOverlays.clear();
   foregroundOverlays.clear();
   parallaxLayers.clear();
+  lightSources.clear();
 }
 
 }

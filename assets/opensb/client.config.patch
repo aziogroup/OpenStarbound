@@ -10,6 +10,34 @@
     "scissor" : false,
     "letterbox" : false
   },
-  "postProcessLayers": [],
-  "postProcessGroups": {}
+  "postProcessGroups": {
+    "bloom" : {
+      "enabledDefault" : true,
+      "friendlyName" : "Bloom",
+      "parameters" : {
+        "bloomThreshold" : {
+          "type" : "slider",
+          "label" : "Threshold",
+          "range" : [0.1, 2.0],
+          "delta" : 0.1,
+          "default" : 0.7,
+          "effects" : ["bloom_extract"]
+        },
+        "bloomIntensity" : {
+          "type" : "slider",
+          "label" : "Intensity",
+          "range" : [0.0, 1.0],
+          "delta" : 0.05,
+          "default" : 0.15,
+          "effects" : ["bloom_composite"]
+        }
+      }
+    }
+  },
+  "postProcessLayers": [
+    { "name": "bloom_extract",   "effects": ["bloom_extract"],   "passes": 1, "group": "bloom" },
+    { "name": "bloom_blur_h",    "effects": ["bloom_blur_h"],    "passes": 1, "group": "bloom" },
+    { "name": "bloom_blur_v",    "effects": ["bloom_blur_v"],    "passes": 1, "group": "bloom" },
+    { "name": "bloom_composite", "effects": ["bloom_composite"], "passes": 1 }
+  ]
 }

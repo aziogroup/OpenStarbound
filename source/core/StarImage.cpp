@@ -203,6 +203,53 @@ Image Image::filled(Vec2U size, Vec4B color, PixelFormat pf) {
   return image;
 }
 
+Image Image::generateNormalMap(Image const& albedo, float strength) {
+  if (albedo.empty())
+    return Image();
+
+  unsigned w = albedo.width();
+  unsigned h = albedo.height();
+  Image normalMap(Vec2U(w, h), PixelFormat::RGBA32);
+
+  auto luminance = [&](unsigned x, unsigned y) -> float {
+    x = min(x, w - 1);
+    y = min(y, h - 1);
+    Vec4B pixel = albedo.get(x, y);
+    return (pixel[0] * 0.2126f + pixel[1] * 0.7152f + pixel[2] * 0.0722f) / 255.0f;
+  };
+
+  for (unsigned y = 0; y < h; ++y) {
+    for (unsigned x = 0; x < w; ++x) {
+      unsigned xm = x > 0 ? x - 1 : 0;
+      unsigned xp = x < w - 1 ? x + 1 : w - 1;
+      unsigned ym = y > 0 ? y - 1 : 0;
+      unsigned yp = y < h - 1 ? y + 1 : h - 1;
+
+      float dx = -luminance(xm, ym) - 2.0f * luminance(xm, y) - luminance(xm, yp)
+                + luminance(xp, ym) + 2.0f * luminance(xp, y) + luminance(xp, yp);
+      float dy = -luminance(xm, ym) - 2.0f * luminance(x, ym) - luminance(xp, ym)
+                + luminance(xm, yp) + 2.0f * luminance(x, yp) + luminance(xp, yp);
+
+      dx *= strength;
+      dy *= strength;
+
+      float nz = 1.0f;
+      float len = sqrt(dx * dx + dy * dy + nz * nz);
+      float nx = (dx / len) * 0.5f + 0.5f;
+      float ny = (dy / len) * 0.5f + 0.5f;
+      float nzn = (nz / len) * 0.5f + 0.5f;
+
+      normalMap.set(x, y, Vec4B(
+        (uint8_t)(nx * 255.0f),
+        (uint8_t)(ny * 255.0f),
+        (uint8_t)(nzn * 255.0f),
+        255));
+    }
+  }
+
+  return normalMap;
+}
+
 Image::Image(PixelFormat pf)
   : m_data(nullptr), m_width(0), m_height(0), m_pixelFormat(pf) {}
 

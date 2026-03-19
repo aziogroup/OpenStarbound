@@ -500,6 +500,9 @@ void WorldClient::render(WorldRenderData& renderData, unsigned bufferTiles) {
 
   renderLightSources = std::move(lightingRenderCallback.lightSources);
 
+  // Copy light sources for GPU lighting before they get moved to the CPU calculator
+  renderData.lightSources = renderLightSources;
+
   RectI window = m_clientState.window();
   RectI tileRange = window.padded(bufferTiles);
   renderData.tileMinPosition = tileRange.min();
@@ -684,6 +687,12 @@ void WorldClient::render(WorldRenderData& renderData, unsigned bufferTiles) {
   LogMap::set("client_render_particle_count", renderData.particles->size());
 
   renderData.skyRenderData = m_sky->renderData();
+
+  // Weather and atmosphere data for shader pipeline
+  renderData.weatherIntensity = m_weather.weatherIntensity();
+  renderData.windStrength = m_weather.wind();
+  renderData.dayLevel = m_sky->dayLevel();
+  renderData.gameTime = (float)(m_sky->timeOfDay() / m_sky->dayLength());
 
   auto environmentBiome = mainEnvironmentBiome();
 

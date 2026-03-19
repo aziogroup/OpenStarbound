@@ -184,6 +184,9 @@ private:
     bool blitted = false;
     unsigned multisample = 0;
     unsigned sizeDiv = 1;
+    GLenum internalFormat = GL_RGB;
+    GLenum glFormat = GL_RGB;
+    GLenum glType = GL_UNSIGNED_BYTE;
 
     GlFrameBuffer(Json const& config);
     ~GlFrameBuffer();

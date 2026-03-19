@@ -6,6 +6,7 @@
 #include "StarTextPainter.hpp"
 #include "StarDrawablePainter.hpp"
 #include "StarRenderer.hpp"
+#include "StarGpuLighting.hpp"
 
 namespace Star {
 
@@ -61,6 +62,8 @@ private:
   Vec2F m_parallaxWorldPosition;
 
   float m_preloadTextureChance;
+
+  GpuLightingPtr m_gpuLighting;
 };
 
 }
