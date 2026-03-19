@@ -58,6 +58,10 @@ RectF Entity::collisionArea() const {
   return RectF::null();
 }
 
+Vec2F Entity::velocity() const {
+  return Vec2F();
+}
+
 bool Entity::ephemeral() const {
   return false;
 }

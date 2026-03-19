@@ -21,6 +21,8 @@ public:
   // Set the camera center position (in world space) to as close to the given
   // location as possible while keeping the screen within world bounds.
   void setCenterWorldPosition(Vec2F position, bool force = false);
+  // Set camera position for rendering without pixel snapping (sub-pixel precision).
+  void setRenderPosition(Vec2F position);
   // Returns the actual camera position.
   Vec2F centerWorldPosition() const;
 

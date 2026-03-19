@@ -34,6 +34,14 @@ public:
   // 'render()' to be called, even if we are still behind on our update rate.
   virtual void setMaxFrameSkip(unsigned maxFrameSkip) = 0;
 
+  // Target render rate independent of update rate. 0 means render is tied to
+  // the update rate (legacy behavior).
+  virtual void setTargetRenderRate(float targetRenderRate) = 0;
+  virtual float targetRenderRate() const = 0;
+  // Interpolation alpha for rendering between update ticks (0.0 = at last
+  // update, 1.0 = at next update).
+  virtual float interpolationAlpha() const = 0;
+
   virtual void setApplicationTitle(String title) = 0;
   virtual void setFullscreenWindow(Vec2U fullScreenResolution) = 0;
   virtual void setNormalWindow(Vec2U windowSize) = 0;

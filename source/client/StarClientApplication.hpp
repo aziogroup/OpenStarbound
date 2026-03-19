@@ -127,6 +127,10 @@ private:
   // Valid if main app state == SinglePlayer
   UniverseServerPtr m_universeServer;
 
+  Vec2F m_previousCameraPosition;
+  Vec2F m_currentCameraPosition;
+  bool m_cameraInterpolation = true;
+
   float m_cameraXOffset = 0.0f;
   float m_cameraYOffset = 0.0f;
   bool m_snapBackCameraOffset = false;

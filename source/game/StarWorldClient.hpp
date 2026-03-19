@@ -153,6 +153,8 @@ public:
   // borderTiles here should extend the client window for border tile
   // calculations.  It is not necessary on the light array.
   void render(WorldRenderData& renderData, unsigned borderTiles);
+  void setRenderAlpha(float alpha);
+  void setMainPlayerRenderOffset(Vec2F offset);
   List<AudioInstancePtr> pullPendingAudio();
   List<AudioInstancePtr> pullPendingMusic();
 
@@ -384,6 +386,13 @@ private:
 
   // used to keep track of already-printed stack traces caused by remote entities, so they don't clog the log
   HashSet<uint64_t> m_entityExceptionsLogged;
+
+  // Decoupled render support (120fps)
+  bool m_needsFullRender = true;
+  float m_renderAlpha = 0.0f;
+  Vec2F m_mainPlayerRenderOffset;
+  List<EntityDrawables> m_cachedEntityDrawables;
+  List<OverheadBar> m_cachedOverheadBars;
 };
 
 }

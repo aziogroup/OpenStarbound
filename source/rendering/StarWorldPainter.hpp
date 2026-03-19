@@ -24,11 +24,11 @@ public:
   WorldCamera& camera();
 
   void update(float dt);
-  void render(WorldRenderData& renderData, function<bool()> lightWaiter);
+  void render(WorldRenderData& renderData, function<bool()> lightWaiter, float interpolationAlpha = 0.0f);
   void adjustLighting(WorldRenderData& renderData);
 
 private:
-  void renderParticles(WorldRenderData& renderData, Particle::Layer layer);
+  void renderParticles(WorldRenderData& renderData, Particle::Layer layer, float interpolationAlpha = 0.0f);
   void renderBars(WorldRenderData& renderData);
 
   void drawEntityLayer(List<Drawable> drawables, EntityHighlightEffect highlightEffect = EntityHighlightEffect());

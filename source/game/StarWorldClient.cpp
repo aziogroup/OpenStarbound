@@ -461,6 +461,14 @@ WorldClientState& WorldClient::clientState() {
   return m_clientState;
 }
 
+void WorldClient::setRenderAlpha(float alpha) {
+  m_renderAlpha = alpha;
+}
+
+void WorldClient::setMainPlayerRenderOffset(Vec2F offset) {
+  m_mainPlayerRenderOffset = offset;
+}
+
 void WorldClient::render(WorldRenderData& renderData, unsigned bufferTiles) {
   if (!m_lightingThread && m_asyncLighting)
     m_lightingThread = Thread::invoke("WorldClient::lightingMain", mem_fn(&WorldClient::lightingMain), this);
@@ -469,8 +477,11 @@ void WorldClient::render(WorldRenderData& renderData, unsigned bufferTiles) {
   if (!inWorld())
     return;
 
-  // If we're dimming the world, then that takes priority
-  m_worldDimTimer.tick();
+  bool isFullRender = m_needsFullRender;
+
+  // Dim timer: only advance on full renders (60Hz)
+  if (isFullRender)
+    m_worldDimTimer.tick();
   float dimRatio = m_worldDimTimer.percent();
 
   // Spends 80% of the time at pitch black with 10% ramp up and down
@@ -486,7 +497,8 @@ void WorldClient::render(WorldRenderData& renderData, unsigned bufferTiles) {
   }
 
   List<LightSource> renderLightSources;
-  m_previewTiles.clear();
+  if (isFullRender)
+    m_previewTiles.clear();
 
   renderData.geometry = m_geometry;
 
@@ -522,95 +534,145 @@ void WorldClient::render(WorldRenderData& renderData, unsigned bufferTiles) {
       lightingCalc();
   }
 
-  float pulseAmount = Root::singleton().assets()->json("/highlights.config:interactivePulseAmount").toFloat();
-  float pulseRate = Root::singleton().assets()->json("/highlights.config:interactivePulseRate").toFloat();
-  float pulseLevel = 1 - pulseAmount * 0.5 * (sin(2 * Constants::pi * pulseRate * Time::monotonicMilliseconds() / 1000.0) + 1);
+  if (isFullRender) {
+    // --- Full render: call entity->render(), collect particles/audio/previewTiles ---
+    float pulseAmount = Root::singleton().assets()->json("/highlights.config:interactivePulseAmount").toFloat();
+    float pulseRate = Root::singleton().assets()->json("/highlights.config:interactivePulseRate").toFloat();
+    float pulseLevel = 1 - pulseAmount * 0.5 * (sin(2 * Constants::pi * pulseRate * Time::monotonicMilliseconds() / 1000.0) + 1);
 
-  bool inspecting = m_mainPlayer->inspecting();
-  float inspectionFlickerMultiplier = Random::randf(1 - Root::singleton().assets()->json("/highlights.config:inspectionFlickerAmount").toFloat(), 1);
+    bool inspecting = m_mainPlayer->inspecting();
+    float inspectionFlickerMultiplier = Random::randf(1 - Root::singleton().assets()->json("/highlights.config:inspectionFlickerAmount").toFloat(), 1);
 
-  EntityId playerAimInteractive = NullEntityId;
-  if (Root::singleton().configuration()->get("interactiveHighlight").toBool()) {
-    if (auto entity = m_mainPlayer->bestInteractionEntity(false))
-      playerAimInteractive = entity->entityId();
-  }
+    EntityId playerAimInteractive = NullEntityId;
+    if (Root::singleton().configuration()->get("interactiveHighlight").toBool()) {
+      if (auto entity = m_mainPlayer->bestInteractionEntity(false))
+        playerAimInteractive = entity->entityId();
+    }
 
-  const List<Directives>* directives = nullptr;
-  if (auto& worldTemplate = m_worldTemplate) {
-    if (const auto& parameters = worldTemplate->worldParameters())
-      if (auto& globalDirectives = parameters->globalDirectives)
-        directives = &globalDirectives.get();
-  }
-  m_entityMap->forAllEntities([&](EntityPtr const& entity) {
-      if (m_startupHiddenEntities.contains(entity->entityId()))
-        return;
+    const List<Directives>* directives = nullptr;
+    if (auto& worldTemplate = m_worldTemplate) {
+      if (const auto& parameters = worldTemplate->worldParameters())
+        if (auto& globalDirectives = parameters->globalDirectives)
+          directives = &globalDirectives.get();
+    }
+    m_entityMap->forAllEntities([&](EntityPtr const& entity) {
+        if (m_startupHiddenEntities.contains(entity->entityId()))
+          return;
 
-      ClientRenderCallback renderCallback;
+        ClientRenderCallback renderCallback;
 
-      try { entity->render(&renderCallback); }
-      catch (StarException const& e) {
-        if (entity->isMaster()) // this is YOUR problem!!
-          throw e; 
-        else { // this is THEIR problem!!
-          auto issue = printException(e, true);
-          auto hash = hashOf(issue);
-          if (!m_entityExceptionsLogged.contains(hash))
-            m_entityExceptionsLogged.insert(hash);
-          else
-            issue = e.what();
+        try { entity->render(&renderCallback); }
+        catch (StarException const& e) {
+          if (entity->isMaster()) // this is YOUR problem!!
+            throw e;
+          else { // this is THEIR problem!!
+            auto issue = printException(e, true);
+            auto hash = hashOf(issue);
+            if (!m_entityExceptionsLogged.contains(hash))
+              m_entityExceptionsLogged.insert(hash);
+            else
+              issue = e.what();
 
-          Logger::error("WorldClient: Exception caught in {}::render ({}): {}", EntityTypeNames.getRight(entity->entityType()), entity->entityId(), issue);
-          auto toolUser = as<ToolUserEntity>(entity);
-          String image = toolUser ? strf("/rendering/sprites/error_{}.png", DirectionNames.getRight(toolUser->facingDirection())) : "/rendering/sprites/error.png";
-          Color color = Color::rgbf(0.8f + (float)sin(m_currentTime * Constants::pi * 2.0) * 0.2f, 0.0f, 0.0f);
-          auto drawable = Drawable::makeImage(image, 1.0f / TilePixels, true, entity->position(), color);
-          drawable.fullbright = true;
-          renderCallback.addDrawable(std::move(drawable), RenderLayerMiddleParticle);
+            Logger::error("WorldClient: Exception caught in {}::render ({}): {}", EntityTypeNames.getRight(entity->entityType()), entity->entityId(), issue);
+            auto toolUser = as<ToolUserEntity>(entity);
+            String image = toolUser ? strf("/rendering/sprites/error_{}.png", DirectionNames.getRight(toolUser->facingDirection())) : "/rendering/sprites/error.png";
+            Color color = Color::rgbf(0.8f + (float)sin(m_currentTime * Constants::pi * 2.0) * 0.2f, 0.0f, 0.0f);
+            auto drawable = Drawable::makeImage(image, 1.0f / TilePixels, true, entity->position(), color);
+            drawable.fullbright = true;
+            renderCallback.addDrawable(std::move(drawable), RenderLayerMiddleParticle);
+          }
         }
-      }
-      
 
-      EntityDrawables ed;
-      for (auto& p : renderCallback.drawables) {
+
+        EntityDrawables ed;
+        for (auto& p : renderCallback.drawables) {
+          if (directives) {
+            int directiveIndex = unsigned(entity->entityId()) % directives->size();
+            for (auto& d : p.second) {
+              if (d.isImage())
+                d.imagePart().addDirectives(directives->at(directiveIndex), true);
+            }
+          }
+          ed.layers[p.first] = std::move(p.second);
+        }
+
+        if (m_interactiveHighlightMode || (!inspecting && entity->entityId() == playerAimInteractive)) {
+          if (auto interactive = as<InteractiveEntity>(entity)) {
+            if (interactive->isInteractive()) {
+              ed.highlightEffect.type = EntityHighlightEffectType::Interactive;
+              ed.highlightEffect.level = pulseLevel;
+            }
+          }
+        } else if (inspecting) {
+          if (auto inspectable = as<InspectableEntity>(entity)) {
+            ed.highlightEffect = m_mainPlayer->inspectionHighlight(inspectable);
+            ed.highlightEffect.level *= inspectionFlickerMultiplier;
+          }
+        }
+        renderData.entityDrawables.append(std::move(ed));
+
         if (directives) {
           int directiveIndex = unsigned(entity->entityId()) % directives->size();
-          for (auto& d : p.second) {
-            if (d.isImage())
-              d.imagePart().addDirectives(directives->at(directiveIndex), true);
+          for (auto& p : renderCallback.particles)
+            p.directives.append(directives->get(directiveIndex));
+        }
+
+        m_particles->addParticles(std::move(renderCallback.particles));
+        m_samples.appendAll(std::move(renderCallback.audios));
+        m_previewTiles.appendAll(std::move(renderCallback.previewTiles));
+        renderData.overheadBars.appendAll(std::move(renderCallback.overheadBars));
+
+      }, [](EntityPtr const& a, EntityPtr const& b) {
+        return a->entityId() < b->entityId();
+      });
+
+    // Cache entity drawables for interpolation renders
+    m_cachedEntityDrawables = renderData.entityDrawables;
+    m_cachedOverheadBars = renderData.overheadBars;
+    m_needsFullRender = false;
+
+  } else {
+    // --- Interpolation render: reuse cached drawables with velocity offset ---
+    renderData.entityDrawables = m_cachedEntityDrawables;
+    renderData.overheadBars = m_cachedOverheadBars;
+
+    if (m_renderAlpha > 0.001f) {
+      EntityId mainPlayerId = m_mainPlayer ? m_mainPlayer->entityId() : NullEntityId;
+      size_t entityIdx = 0;
+      m_entityMap->forAllEntities([&](EntityPtr const& entity) {
+          if (m_startupHiddenEntities.contains(entity->entityId()))
+            return;
+          if (entityIdx >= renderData.entityDrawables.size())
+            return;
+
+          // Main player uses camera-matched offset for perfect sync;
+          // other entities use velocity-based extrapolation.
+          Vec2F renderOffset;
+          if (entity->entityId() == mainPlayerId) {
+            renderOffset = m_mainPlayerRenderOffset;
+          } else {
+            Vec2F vel = entity->velocity();
+            if (vel != Vec2F()) {
+              renderOffset = vel * m_renderAlpha * GlobalTimestep;
+              if (renderOffset.magnitude() > 5.0f)
+                renderOffset = Vec2F();
+            }
           }
-        }
-        ed.layers[p.first] = std::move(p.second);
-      }
 
-      if (m_interactiveHighlightMode || (!inspecting && entity->entityId() == playerAimInteractive)) {
-        if (auto interactive = as<InteractiveEntity>(entity)) {
-          if (interactive->isInteractive()) {
-            ed.highlightEffect.type = EntityHighlightEffectType::Interactive;
-            ed.highlightEffect.level = pulseLevel;
+          if (renderOffset != Vec2F()) {
+            auto& ed = renderData.entityDrawables[entityIdx];
+            for (auto& p : ed.layers) {
+              for (auto& d : p.second)
+                d.translate(renderOffset);
+            }
           }
-        }
-      } else if (inspecting) {
-        if (auto inspectable = as<InspectableEntity>(entity)) {
-          ed.highlightEffect = m_mainPlayer->inspectionHighlight(inspectable);
-          ed.highlightEffect.level *= inspectionFlickerMultiplier;
-        }
-      }
-      renderData.entityDrawables.append(std::move(ed));
 
-      if (directives) {
-        int directiveIndex = unsigned(entity->entityId()) % directives->size();
-        for (auto& p : renderCallback.particles)
-          p.directives.append(directives->get(directiveIndex));
-      }
-      
-      m_particles->addParticles(std::move(renderCallback.particles));
-      m_samples.appendAll(std::move(renderCallback.audios));
-      m_previewTiles.appendAll(std::move(renderCallback.previewTiles));
-      renderData.overheadBars.appendAll(std::move(renderCallback.overheadBars));
-
-    }, [](EntityPtr const& a, EntityPtr const& b) {
-      return a->entityId() < b->entityId();
-    });
+          entityIdx++;
+        }, [](EntityPtr const& a, EntityPtr const& b) {
+          return a->entityId() < b->entityId();
+        });
+    }
+  }
 
   m_tileArray->tileEachTo(renderData.tiles, tileRange, [&](RenderTile& renderTile, Vec2I const&, ClientTile const& clientTile) {
       renderTile.foreground = clientTile.foreground;
@@ -696,7 +758,8 @@ void WorldClient::render(WorldRenderData& renderData, unsigned bufferTiles) {
 
   auto environmentBiome = mainEnvironmentBiome();
 
-  m_parallaxFadeTimer.tick();
+  if (isFullRender)
+    m_parallaxFadeTimer.tick();
   if (m_parallaxFadeTimer.ready() && m_nextParallax) {
     m_currentParallax = m_nextParallax;
     m_nextParallax.reset();
@@ -1334,6 +1397,8 @@ void WorldClient::update(float dt) {
   LogMap::set("client_entities", m_entityMap->size());
   LogMap::set("client_sectors", toString(loadedSectors.size()));
   LogMap::set("client_lua_mem", m_luaRoot->luaMemoryUsage());
+
+  m_needsFullRender = true;
 }
 
 ConnectionId WorldClient::connection() const {

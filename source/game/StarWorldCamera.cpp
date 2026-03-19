@@ -2,6 +2,17 @@
 
 namespace Star {
 
+void WorldCamera::setRenderPosition(Vec2F position) {
+  // No pixel snapping - sub-pixel precision for smooth interpolated rendering.
+  // tileMinScreen() computes tile grid offset from worldScreenRect() which uses
+  // m_worldCenter, so tiles remain correctly aligned.
+  m_worldCenter = m_worldGeometry.xwrap(position);
+  m_worldCenter[1] = clamp(m_worldCenter[1],
+      (float)m_screenSize[1] / (TilePixels * m_pixelRatio * 2),
+      m_worldGeometry.height() - (float)m_screenSize[1] / (TilePixels * m_pixelRatio * 2));
+  // m_rawWorldCenter is NOT modified - preserving it for the next update tick
+}
+
 void WorldCamera::setCenterWorldPosition(Vec2F position, bool force) {
   m_rawWorldCenter = position;
   // Only actually move the world center if a half pixel distance has been

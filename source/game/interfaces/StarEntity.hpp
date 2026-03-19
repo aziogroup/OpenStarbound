@@ -77,6 +77,10 @@ public:
   // positions are relative to this.
   virtual Vec2F position() const = 0;
 
+  // Current velocity of the entity, used for render interpolation.
+  virtual Vec2F velocity() const;
+
+
   // Largest bounding-box of this entity.  Any damage boxes / drawables / light
   // or sound *sources* must be contained within this bounding box.  Used for
   // all top-level spatial queries.

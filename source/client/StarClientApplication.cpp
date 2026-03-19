@@ -70,6 +70,9 @@ Json const AdditionalDefaultConfiguration = Json::parseJson(R"JSON(
       "fullscreen" : false,
       "borderless" : false,
       "maximized" : true,
+      "maxFrameRate" : 0,
+      "cameraInterpolation" : true,
+      "entityInterpolation" : true,
       "antiAliasing" : false,
       "zoomLevel" : 3.0,
       "cameraSpeedFactor" : 1.0,
@@ -222,6 +225,11 @@ void ClientApplication::applicationInit(ApplicationControllerPtr appController) 
     ServerGlobalTimestep = 1.0f / jServerUpdateRate.toFloat();
 
   appController->setTargetUpdateRate(updateRate);
+
+  float maxFrameRate = configuration->get("maxFrameRate").optFloat().value(0.0f);
+  appController->setTargetRenderRate(maxFrameRate);
+  m_cameraInterpolation = configuration->get("cameraInterpolation").optBool().value(true);
+
   appController->setVSyncEnabled(vsync);
   appController->setCursorHardware(configuration->get("hardwareCursor").optBool().value(true));
 
@@ -448,18 +456,42 @@ void ClientApplication::render() {
   } else if (m_state > MainAppState::Title) {
     WorldClientPtr worldClient = m_universeClient->worldClient();
     if (worldClient) {
+      // Camera interpolation: RAII guard restores camera position after render
+      WorldCamera& cam = m_worldPainter->camera();
+      Vec2F savedCameraPos = cam.centerWorldPosition();
+      bool cameraGuardActive = false;
+
+      float alpha = appController()->interpolationAlpha();
+      Vec2F cameraExtraOffset;
+      if (m_cameraInterpolation && alpha > 0.001f) {
+        auto geometry = worldClient->geometry();
+        Vec2F diff = geometry.diff(m_currentCameraPosition, m_previousCameraPosition);
+        if (diff.magnitude() < 50.0f) { // teleport detection
+          cameraExtraOffset = diff * alpha;
+          cam.setRenderPosition(m_currentCameraPosition + cameraExtraOffset);
+          cameraGuardActive = true;
+        }
+      }
+
       auto totalStart = Time::monotonicMicroseconds();
       renderer->switchEffectConfig("world");
       auto clientStart = totalStart;
+      bool entityInterpolation = m_root->configuration()->get("entityInterpolation").optBool().value(true);
+      worldClient->setRenderAlpha(entityInterpolation ? alpha : 0.0f);
+      worldClient->setMainPlayerRenderOffset(cameraExtraOffset);
       worldClient->render(m_renderData, TilePainter::BorderTileSize);
       LogMap::set("client_render_world_client", strf(u8"{:05d}\u00b5s", Time::monotonicMicroseconds() - clientStart));
 
       auto paintStart = Time::monotonicMicroseconds();
       m_worldPainter->render(m_renderData, [&]() -> bool {
         return worldClient->waitForLighting(&m_renderData);
-      });
+      }, alpha);
       LogMap::set("client_render_world_painter", strf(u8"{:05d}\u00b5s", Time::monotonicMicroseconds() - paintStart));
       LogMap::set("client_render_world_total", strf(u8"{:05d}\u00b5s", Time::monotonicMicroseconds() - totalStart));
+
+      // Restore camera position after interpolated render
+      if (cameraGuardActive)
+        cam.setCenterWorldPosition(savedCameraPos, true);
       
       auto size = Vec2F(renderer->screenSize());
       auto quad = renderFlatRect(RectF::withSize(size / -2, size), Vec4B::filled(0), 0.0f);
@@ -533,6 +565,31 @@ void ClientApplication::render() {
           static float colorBleedIntensity = 0.5f;
           if (ImGui::SliderFloat("Color Bleed", &colorBleedIntensity, 0.0f, 2.0f, "%.2f"))
             renderer->setEffectScriptableParameter("bloom_composite", "colorBleedIntensity", colorBleedIntensity);
+        }
+
+        ImGui::Separator();
+
+        // Frame Rate
+        {
+          float currentFps = appController()->renderFps();
+          float currentUpdate = appController()->updateRate();
+          ImGui::Text("Render: %.1f FPS | Update: %.1f Hz", currentFps, currentUpdate);
+
+          static int maxFrameRateInt = (int)config->get("maxFrameRate").optFloat().value(0.0f);
+          if (ImGui::SliderInt("Max Frame Rate", &maxFrameRateInt, 0, 360, maxFrameRateInt == 0 ? "VSync" : "%d")) {
+            config->set("maxFrameRate", maxFrameRateInt);
+            appController()->setTargetRenderRate((float)maxFrameRateInt);
+          }
+
+          bool camInterp = config->get("cameraInterpolation").optBool().value(true);
+          if (ImGui::Checkbox("Camera Interpolation", &camInterp)) {
+            config->set("cameraInterpolation", camInterp);
+            m_cameraInterpolation = camInterp;
+          }
+
+          bool entityInterp = config->get("entityInterpolation").optBool().value(true);
+          if (ImGui::Checkbox("Entity Interpolation", &entityInterp))
+            config->set("entityInterpolation", entityInterp);
         }
 
         ImGui::Separator();
@@ -670,6 +727,8 @@ void ClientApplication::changeState(MainAppState newState) {
   }
 
   if (oldState > MainAppState::Title && m_state <= MainAppState::Title) {
+    m_previousCameraPosition = m_currentCameraPosition = Vec2F();
+
     if (m_universeClient)
       m_universeClient->disconnect();
 
@@ -1468,8 +1527,10 @@ void ClientApplication::updateCamera(float dt) {
 
   auto smoothDelta = newCameraPosition - baseCamera;
 
+  m_previousCameraPosition = m_currentCameraPosition;
   m_worldPainter->setCameraPosition(m_universeClient->worldClient()->geometry(), baseCamera + (smoothDelta + m_cameraSmoothDelta) * 0.5f);
   m_cameraSmoothDelta = smoothDelta;
+  m_currentCameraPosition = camera.centerWorldPosition();
 
   m_universeClient->worldClient()->setClientWindow(camera.worldTileRect());
 }

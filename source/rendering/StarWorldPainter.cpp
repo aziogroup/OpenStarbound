@@ -1,4 +1,5 @@
 #include "StarWorldPainter.hpp"
+#include "StarGameTypes.hpp"
 #include "StarAnimation.hpp"
 #include "StarRoot.hpp"
 #include "StarConfiguration.hpp"
@@ -51,7 +52,7 @@ void WorldPainter::update(float dt) {
   m_environmentPainter->update(dt);
 }
 
-void WorldPainter::render(WorldRenderData& renderData, function<bool()> lightWaiter) {
+void WorldPainter::render(WorldRenderData& renderData, function<bool()> lightWaiter, float interpolationAlpha) {
   m_camera.setScreenSize(m_renderer->screenSize());
   m_camera.setTargetPixelRatio(Root::singleton().configuration()->get("zoomLevel").toFloat());
 
@@ -166,17 +167,17 @@ void WorldPainter::render(WorldRenderData& renderData, function<bool()> lightWai
   renderEntitiesUntil(RenderLayerPlatform);
   m_tilePainter->renderMidground(m_camera);
   renderEntitiesUntil(RenderLayerBackParticle);
-  renderParticles(renderData, Particle::Layer::Back);
+  renderParticles(renderData, Particle::Layer::Back, interpolationAlpha);
   renderEntitiesUntil(RenderLayerLiquid);
   m_tilePainter->renderLiquid(m_camera);
   renderEntitiesUntil(RenderLayerMiddleParticle);
-  renderParticles(renderData, Particle::Layer::Middle);
+  renderParticles(renderData, Particle::Layer::Middle, interpolationAlpha);
   renderEntitiesUntil(RenderLayerForegroundTile);
   m_tilePainter->renderForeground(m_camera);
   renderEntitiesUntil(RenderLayerForegroundOverlay);
   drawDrawableSet(renderData.foregroundOverlays);
   renderEntitiesUntil(RenderLayerFrontParticle);
-  renderParticles(renderData, Particle::Layer::Front);
+  renderParticles(renderData, Particle::Layer::Front, interpolationAlpha);
   renderEntitiesUntil(RenderLayerOverlay);
   drawDrawableSet(renderData.nametags);
   renderBars(renderData);
@@ -197,7 +198,7 @@ void WorldPainter::adjustLighting(WorldRenderData& renderData) {
   m_tilePainter->adjustLighting(renderData);
 }
 
-void WorldPainter::renderParticles(WorldRenderData& renderData, Particle::Layer layer) {
+void WorldPainter::renderParticles(WorldRenderData& renderData, Particle::Layer layer, float interpolationAlpha) {
   const int textParticleFontSize = m_assets->json("/rendering.config:textParticleFontSize").toInt();
   const RectF particleRenderWindow = RectF::withSize(Vec2F(), Vec2F(m_camera.screenSize())).padded(m_assets->json("/rendering.config:particleRenderWindowPadding").toInt());
 
@@ -208,7 +209,10 @@ void WorldPainter::renderParticles(WorldRenderData& renderData, Particle::Layer 
     if (layer != particle.layer)
       continue;
 
-    Vec2F position = m_camera.worldToScreen(particle.position);
+    Vec2F particlePos = particle.position;
+    if (interpolationAlpha > 0.001f)
+      particlePos += particle.velocity * interpolationAlpha * GlobalTimestep;
+    Vec2F position = m_camera.worldToScreen(particlePos);
 
     if (!particleRenderWindow.contains(position))
       continue;
