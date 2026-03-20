@@ -19,6 +19,18 @@ STAR_CLASS(PlayerInventory);
 
 STAR_EXCEPTION(InventoryException, StarException);
 
+struct CustomBarSlotLink {
+  Maybe<InventorySlot> slot;
+  ItemDescriptor descriptor;
+
+  explicit operator bool() const;
+  bool operator==(CustomBarSlotLink const& rhs) const;
+  bool operator!=(CustomBarSlotLink const& rhs) const;
+};
+
+DataStream& operator>>(DataStream& ds, CustomBarSlotLink& link);
+DataStream& operator<<(DataStream& ds, CustomBarSlotLink const& link);
+
 // Describes a player's entire inventory, including the main bag, material bag,
 // object bag, reagent bag, food bag, weapon and armor slots, swap slot, trash
 // slot, essential items, and currencies.
@@ -135,11 +147,14 @@ public:
 
   // A custom bar location primary and secondary cannot point to a slot that
   // has no item, and rather than set an empty slot to that location, the slot
-  // will simply be cleared.  If a primary slot is set to a two handed item, it
-  // will clear the secondary slot.  Any secondary slot that is set must be a
-  // one handed item.
+  // will simply be cleared.  The remembered descriptor is retained separately
+  // so the action bar can preserve the shortcut while the item is out of stock.
+  // If a primary slot is set to a two handed item, it will clear the secondary
+  // slot.  Any secondary slot that is set must be a one handed item.
   Maybe<InventorySlot> customBarPrimarySlot(CustomBarIndex customBarIndex) const;
   Maybe<InventorySlot> customBarSecondarySlot(CustomBarIndex customBarIndex) const;
+  Maybe<ItemDescriptor> customBarPrimaryDescriptor(CustomBarIndex customBarIndex) const;
+  Maybe<ItemDescriptor> customBarSecondaryDescriptor(CustomBarIndex customBarIndex) const;
   void setCustomBarPrimarySlot(CustomBarIndex customBarIndex, Maybe<InventorySlot> slot);
   void setCustomBarSecondarySlot(CustomBarIndex customBarIndex, Maybe<InventorySlot> slot);
 
@@ -193,7 +208,7 @@ public:
   void cleanup();
 
 private:
-  typedef pair<Maybe<InventorySlot>, Maybe<InventorySlot>> CustomBarLink;
+  typedef pair<CustomBarSlotLink, CustomBarSlotLink> CustomBarLink;
 
   static bool checkInventoryFilter(ItemPtr const& items, String const& filterName);
 

@@ -197,6 +197,7 @@ bool ActionBar::sendEvent(InputEvent const& event) {
 
 void ActionBar::update(float) {
   auto inventory = m_player->inventory();
+  auto itemDatabase = Root::singleton().itemDatabase();
   auto abl = inventory->selectedActionBarLocation();
   if (abl.is<CustomBarIndex>()) {
     auto overlayLoc = m_customBarWidgets.at(abl.get<CustomBarIndex>()).left->position();
@@ -230,12 +231,28 @@ void ActionBar::update(float) {
 
     ItemPtr primaryItem;
     ItemPtr secondaryItem;
+    bool primaryGhost = false;
+    bool secondaryGhost = false;
 
     if (auto slot = inventory->customBarPrimarySlot(i))
       primaryItem = inventory->itemsAt(*slot);
 
     if (auto slot = inventory->customBarSecondarySlot(i))
       secondaryItem = inventory->itemsAt(*slot);
+
+    if (!primaryItem) {
+      if (auto descriptor = inventory->customBarPrimaryDescriptor(i)) {
+        primaryItem = itemDatabase->itemShared(*descriptor);
+        primaryGhost = (bool)primaryItem;
+      }
+    }
+
+    if (!secondaryItem) {
+      if (auto descriptor = inventory->customBarSecondaryDescriptor(i)) {
+        secondaryItem = itemDatabase->itemShared(*descriptor);
+        secondaryGhost = (bool)secondaryItem;
+      }
+    }
 
     bool primaryPreview = false;
     bool secondaryPreview = false;
@@ -259,7 +276,7 @@ void ActionBar::update(float) {
 
     auto& widgets = m_customBarWidgets[i];
     widgets.left->setItem(primaryItem);
-    if (primaryPreview) {
+    if (primaryPreview || primaryGhost) {
       widgets.left->showDurability(false);
       widgets.left->showCount(false);
       widgets.leftOverlay->show();
@@ -274,14 +291,16 @@ void ActionBar::update(float) {
       widgets.right->showSecondaryIcon(true);
       widgets.right->showDurability(false);
       widgets.right->showCount(false);
-      if (primaryItem->hasSecondaryDrawables())
+      if (primaryGhost)
+        widgets.rightOverlay->show();
+      else if (primaryItem->hasSecondaryDrawables())
         widgets.rightOverlay->hide();
       else
         widgets.rightOverlay->show();
     } else {
       widgets.right->showSecondaryIcon(false);
       widgets.right->setItem(secondaryItem);
-      if (secondaryPreview) {
+      if (secondaryPreview || secondaryGhost) {
         widgets.right->showDurability(false);
         widgets.right->showCount(false);
         widgets.rightOverlay->show();
