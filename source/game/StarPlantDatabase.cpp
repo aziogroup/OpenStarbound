@@ -3,6 +3,7 @@
 #include "StarJsonExtra.hpp"
 #include "StarAssets.hpp"
 #include "StarRoot.hpp"
+#include "StarTranslationDatabase.hpp"
 
 namespace Star {
 
@@ -202,7 +203,18 @@ TreeVariant PlantDatabase::buildTreeVariant(
     if (entry.first.endsWith("Description"))
       descriptions[entry.first] = entry.second;
   }
-  descriptions["description"] = stemConfig.settings.getString("description", stemName + " with " + foliageName);
+  {
+    String fallback = stemName + " with " + foliageName;
+    if (auto* root = Root::singletonPtr()) {
+      if (auto db = root->translationDatabase()) {
+        String tStem = db->translate(stemName).value(stemName);
+        String tWith = db->translate(" with ").value(" with ");
+        String tFoliage = db->translate(foliageName).value(foliageName);
+        fallback = tStem + tWith + tFoliage;
+      }
+    }
+    descriptions["description"] = stemConfig.settings.getString("description", fallback);
+  }
   treeVariant.descriptions = descriptions;
 
   treeVariant.ephemeral = stemConfig.settings.getBool("allowsBlockPlacement", false);
@@ -328,7 +340,18 @@ BushVariant PlantDatabase::buildBushVariant(String const& bushName, float baseHu
     if (entry.first.endsWith("Description"))
       descriptions[entry.first] = entry.second;
   }
-  descriptions["description"] = config.settings.getString("description", bushName + " with " + modName);
+  {
+    String fallback = bushName + " with " + modName;
+    if (auto* root = Root::singletonPtr()) {
+      if (auto db = root->translationDatabase()) {
+        String tBush = db->translate(bushName).value(bushName);
+        String tWith = db->translate(" with ").value(" with ");
+        String tMod = db->translate(modName).value(modName);
+        fallback = tBush + tWith + tMod;
+      }
+    }
+    descriptions["description"] = config.settings.getString("description", fallback);
+  }
   bushVariant.descriptions = descriptions;
 
   bushVariant.ephemeral = config.settings.getBool("ephemeral", true);
