@@ -57,7 +57,7 @@ void GpuLighting::update(WorldRenderData const& renderData,
     auto const& light = lights[i];
     float radius = max(light.color[0], max(light.color[1], light.color[2]));
     // Scale radius based on light intensity - brighter lights reach further
-    radius = radius * 24.0f; // approximate tile radius
+    radius = radius * 16.0f; // approximate tile radius
 
     // Row 0: position, radius, color.r
     float* row0 = (float*)m_lightDataTexture.data() + i * 4;

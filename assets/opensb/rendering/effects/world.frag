@@ -65,26 +65,24 @@ vec3 sampleLight(vec2 coord, vec2 scale) {
 }
 
 // GPU ray-march shadow (0.0 = fully shadowed, 1.0 = fully lit)
+// Uses Beer-Lambert absorption for smooth, band-free shadows
 float rayMarchShadow(vec2 from, vec2 to) {
-  float shadow = 1.0;
   vec2 dir = to - from;
   float dist = length(dir);
   if (dist < 0.01) return 1.0;
   dir /= dist;
-  int steps = int(min(dist * 2.0, 48.0));
+  int steps = int(min(dist * 1.5, 32.0));
   float stepSize = dist / float(max(steps, 1));
+  float absorption = 0.0;
   for (int i = 1; i < steps; i++) {
     vec2 samplePos = from + dir * (float(i) * stepSize);
     vec2 uv = (samplePos - occlusionOffset) / occlusionMapSize;
     if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) continue;
     float occ = texture(occlusionMap, uv).r;
-    if (occ > 0.5) {
-      float d = float(i) * stepSize;
-      shadow = min(shadow, d * 4.0 / dist);
-      if (shadow <= 0.01) return 0.0;
-    }
+    absorption += occ * stepSize;
+    if (absorption > 3.0) return 0.0;
   }
-  return clamp(shadow, 0.0, 1.0);
+  return exp(-absorption * 3.0);
 }
 
 void main() {
@@ -118,7 +116,7 @@ void main() {
       if (dist > radius) continue;
       float atten = 1.0 - (dist / radius);
       atten *= atten;
-      if (atten > 0.01) {
+      if (atten > 0.05) {
         float shadow = rayMarchShadow(worldPos, lightPos);
         shadowFactor = min(shadowFactor, mix(1.0, shadow, atten));
       }
