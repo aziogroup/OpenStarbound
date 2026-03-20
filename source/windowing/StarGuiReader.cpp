@@ -1,6 +1,8 @@
 #include "StarGuiReader.hpp"
 #include "StarPane.hpp"
 #include "StarJsonExtra.hpp"
+#include "StarRoot.hpp"
+#include "StarTranslationDatabase.hpp"
 
 namespace Star {
 
@@ -29,6 +31,17 @@ WidgetConstructResult GuiReader::titleHandler(String const&, Json const& config)
   if (m_pane) {
     String title = config.getString("title", "");
     String subtitle = config.getString("subtitle", "");
+
+    // Translate title and subtitle
+    if (auto* root = Root::singletonPtr()) {
+      if (auto db = root->translationDatabase()) {
+        if (auto t = db->translate(title))
+          title = std::move(*t);
+        if (auto t = db->translate(subtitle))
+          subtitle = std::move(*t);
+      }
+    }
+
     Json iconConfig = config.get("icon", Json());
 
     if (iconConfig.isNull()) {

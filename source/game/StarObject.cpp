@@ -18,6 +18,7 @@
 #include "StarRootLuaBindings.hpp"
 #include "StarNetworkedAnimatorLuaBindings.hpp"
 #include "StarLuaGameConverters.hpp"
+#include "StarTranslationDatabase.hpp"
 #include "StarParticleDatabase.hpp"
 #include "StarMaterialDatabase.hpp"
 #include "StarScriptedAnimatorLuaBindings.hpp"
@@ -573,11 +574,25 @@ String Object::name() const {
 }
 
 String Object::shortDescription() const {
-  return configValue("shortdescription", name()).toString();
+  String desc = configValue("shortdescription", name()).toString();
+  if (auto* root = Root::singletonPtr()) {
+    if (auto db = root->translationDatabase()) {
+      if (auto t = db->translate(desc))
+        return std::move(*t);
+    }
+  }
+  return desc;
 }
 
 String Object::description() const {
-  return configValue("description", shortDescription()).toString();
+  String desc = configValue("description", shortDescription()).toString();
+  if (auto* root = Root::singletonPtr()) {
+    if (auto db = root->translationDatabase()) {
+      if (auto t = db->translate(desc))
+        return std::move(*t);
+    }
+  }
+  return desc;
 }
 
 bool Object::inspectable() const {

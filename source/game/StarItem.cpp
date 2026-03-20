@@ -5,6 +5,7 @@
 #include "StarRandom.hpp"
 #include "StarLogging.hpp"
 #include "StarWorldLuaBindings.hpp"
+#include "StarTranslationDatabase.hpp"
 
 namespace Star {
 
@@ -18,6 +19,17 @@ Item::Item(Json config, String directory, Json parameters) {
   m_maxStack = instanceValue("maxStack", Root::singleton().assets()->json("/items/defaultParameters.config:defaultMaxStack").toInt()).toInt();
   m_shortDescription = instanceValue("shortdescription", "").toString();
   m_description = instanceValue("description", "").toString();
+
+  // Translate display text at load time so all downstream usage
+  // (crafting lists, tooltips, composition) uses the translated text
+  if (auto* root = Root::singletonPtr()) {
+    if (auto db = root->translationDatabase()) {
+      if (auto t = db->translate(m_shortDescription))
+        m_shortDescription = std::move(*t);
+      if (auto t = db->translate(m_description))
+        m_description = std::move(*t);
+    }
+  }
 
   m_rarity = RarityNames.getLeft(instanceValue("rarity").toString());
 
@@ -222,6 +234,12 @@ void Item::setDescription(String const& description) {
 
 void Item::setShortDescription(String const& description) {
   m_shortDescription = description;
+  if (auto* root = Root::singletonPtr()) {
+    if (auto db = root->translationDatabase()) {
+      if (auto t = db->translate(m_shortDescription))
+        m_shortDescription = std::move(*t);
+    }
+  }
 }
 
 void Item::setRarity(Rarity rarity) {

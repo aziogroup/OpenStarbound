@@ -7,6 +7,7 @@
 #include "StarImageWidget.hpp"
 #include "StarItemDatabase.hpp"
 #include "StarGuiReader.hpp"
+#include "StarTranslationDatabase.hpp"
 
 namespace Star {
 
@@ -289,6 +290,14 @@ void Pane::setTitle(WidgetPtr icon, String const& title, String const& subTitle)
   m_icon = icon;
   m_title = title;
   m_subTitle = subTitle;
+  if (auto* root = Root::singletonPtr()) {
+    if (auto db = root->translationDatabase()) {
+      if (auto t = db->translate(m_title))
+        m_title = std::move(*t);
+      if (auto t = db->translate(m_subTitle))
+        m_subTitle = std::move(*t);
+    }
+  }
   if (m_icon) {
     m_icon->setParent(this);
     m_icon->show();
@@ -298,6 +307,14 @@ void Pane::setTitle(WidgetPtr icon, String const& title, String const& subTitle)
 void Pane::setTitleString(String const& title, String const& subTitle) {
   m_title = title;
   m_subTitle = subTitle;
+  if (auto* root = Root::singletonPtr()) {
+    if (auto db = root->translationDatabase()) {
+      if (auto t = db->translate(m_title))
+        m_title = std::move(*t);
+      if (auto t = db->translate(m_subTitle))
+        m_subTitle = std::move(*t);
+    }
+  }
 }
 
 void Pane::setTitleIcon(WidgetPtr icon) {
