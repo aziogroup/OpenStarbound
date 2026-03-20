@@ -18,6 +18,7 @@
 #include "StarBiomeDatabase.hpp"
 #include "StarVersioningDatabase.hpp"
 #include "StarMaterialDatabase.hpp"
+#include "StarTranslationDatabase.hpp"
 #include "StarCollectionDatabase.hpp"
 #include "StarBehaviorDatabase.hpp"
 #include "StarDamageDatabase.hpp"
@@ -74,6 +75,8 @@ LuaCallbacks LuaBindings::makeRootCallbacks() {
 
   callbacks.registerCallbackWithSignature<Maybe<String>, String, Maybe<String>>("materialMiningSound", bind(RootCallbacks::materialMiningSound, root, _1, _2));
   callbacks.registerCallbackWithSignature<Maybe<String>, String, Maybe<String>>("materialFootstepSound", bind(RootCallbacks::materialFootstepSound, root, _1, _2));
+
+  callbacks.registerCallbackWithSignature<Maybe<String>, String>("translate", bind(RootCallbacks::translate, root, _1));
 
   auto getVariant = [](unsigned x, unsigned y, bool isMatMod, VariantTerrainLayer layer, unsigned variants) -> unsigned {
     static thread_local std::unique_ptr<XXH32_state_t, decltype(&XXH32_freeState)>
@@ -563,6 +566,10 @@ Maybe<String> LuaBindings::RootCallbacks::materialFootstepSound(
   if (sound.empty())
     return {};
   return sound;
+}
+
+Maybe<String> LuaBindings::RootCallbacks::translate(Root* root, String const& text) {
+  return root->translationDatabase()->translate(text);
 }
 
 }

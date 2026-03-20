@@ -57,6 +57,7 @@ namespace LuaBindings {
     JsonArray createTreasure(Root* root, String const& pool, float level, Maybe<uint64_t> seed);
     Maybe<String> materialMiningSound(Root* root, String const& materialName, Maybe<String> const& modName);
     Maybe<String> materialFootstepSound(Root* root, String const& materialName, Maybe<String> const& modName);
+    Maybe<String> translate(Root* root, String const& text);
   }
 }
 }

@@ -2,6 +2,7 @@
 #include "StarMathCommon.hpp"
 #include "StarRoot.hpp"
 #include "StarAssets.hpp"
+#include "StarTranslationDatabase.hpp"
 #include "StarGuiReader.hpp"
 #include "StarLabelWidget.hpp"
 #include "StarImageWidget.hpp"
@@ -78,23 +79,36 @@ void QuestTrackerPane::update(float dt) {
         m_questObjectiveList->hide();
       } else {
         m_questObjectiveList->show();
+        // Helper: translate objective text before applying template
+        auto translateObjective = [](String objectiveText) -> String {
+          if (auto* root = Root::singletonPtr()) {
+            if (auto db = root->translationDatabase()) {
+              if (auto trans = db->translate(objectiveText))
+                return std::move(*trans);
+            }
+          }
+          return objectiveText;
+        };
+
         if (m_expanded) {
           String listText = "";
           for (auto objective : objectiveList.value()) {
+            String objText = translateObjective(objective.get(0).toString());
             if (objective.get(1).toBool())
-              listText += m_completeObjectiveTemplate.replaceTags(StringMap<String>{{"objective", objective.get(0).toString()}});
+              listText += m_completeObjectiveTemplate.replaceTags(StringMap<String>{{"objective", objText}});
             else
-              listText += m_incompleteObjectiveTemplate.replaceTags(StringMap<String>{{"objective", objective.get(0).toString()}});
+              listText += m_incompleteObjectiveTemplate.replaceTags(StringMap<String>{{"objective", objText}});
           }
           m_questObjectiveList->setText(listText);
         } else {
           String displayObjective = "";
           for (auto objective : objectiveList.value()) {
+            String objText = translateObjective(objective.get(0).toString());
             if (displayObjective.empty() || !objective.get(1).toBool()) {
               if (objective.get(1).toBool()) {
-                displayObjective = m_completeObjectiveTemplate.replaceTags(StringMap<String>{{"objective", objective.get(0).toString()}});
+                displayObjective = m_completeObjectiveTemplate.replaceTags(StringMap<String>{{"objective", objText}});
               } else {
-                displayObjective = m_incompleteObjectiveTemplate.replaceTags(StringMap<String>{{"objective", objective.get(0).toString()}});
+                displayObjective = m_incompleteObjectiveTemplate.replaceTags(StringMap<String>{{"objective", objText}});
                 break;
               }
             }
