@@ -39,6 +39,9 @@ function patch(config)
   shift(clone(layout, "zoomLabel", "interfaceScaleLabel"), 0, 28).value = "INTERFACE SCALE"
   shift(clone(layout, "zoomSlider", "interfaceScaleSlider"), 0, 28)
   shift(clone(layout, "zoomValueLabel", "interfaceScaleValueLabel"), 0, 28)
+  shift(clone(layout, "zoomLabel", "hudInterfaceScaleLabel"), 0, 56).value = "HUD SCALE"
+  shift(clone(layout, "zoomSlider", "hudInterfaceScaleSlider"), 0, 56)
+  shift(clone(layout, "zoomValueLabel", "hudInterfaceScaleValueLabel"), 0, 56)
   config.interfaceScaleList = {0} -- 0 = AUTO!
   for i = 1, 17 do config.interfaceScaleList[i + 1] = 0.75 + i / 4 end
 
@@ -53,12 +56,12 @@ function patch(config)
   shift(clone(layout, "multiTextureCheckbox", "hardwareCursorCheckbox"), 99, -11)
   
   -- Create shader menu button
-  shift(moveto(clone(layout, "accept", "showShadersMenu"), layout.interfaceScaleSlider), 112, -2).caption = "Shaders"
+  shift(moveto(clone(layout, "accept", "showShadersMenu"), layout.hudInterfaceScaleSlider), 112, -2).caption = "Shaders"
   
 
-  shift(layout.title, 0, 24)
-  shift(layout.resLabel, 0, 28)
-  shift(layout.resSlider, 0, 28)
-  shift(layout.resValueLabel, 0, 28)
+  shift(layout.title, 0, 52)
+  shift(layout.resLabel, 0, 56)
+  shift(layout.resSlider, 0, 56)
+  shift(layout.resValueLabel, 0, 56)
   return config
 end

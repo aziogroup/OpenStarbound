@@ -35,6 +35,11 @@ GraphicsMenu::GraphicsMenu(PaneManager* manager,UniverseClientPtr client)
       m_localChanges.set("interfaceScale", m_interfaceScaleList[interfaceScaleSlider->val()]);
       syncGui();
     });
+  reader.registerCallback("hudInterfaceScaleSlider", [=](Widget*) {
+      auto hudInterfaceScaleSlider = fetchChild<SliderBarWidget>("hudInterfaceScaleSlider");
+      m_localChanges.set("hudInterfaceScale", m_interfaceScaleList[hudInterfaceScaleSlider->val()]);
+      syncGui();
+    });
   reader.registerCallback("zoomSlider", [=](Widget*) {
       auto zoomSlider = fetchChild<SliderBarWidget>("zoomSlider");
       m_localChanges.set("zoomLevel", m_zoomList[zoomSlider->val()]);
@@ -122,6 +127,7 @@ GraphicsMenu::GraphicsMenu(PaneManager* manager,UniverseClientPtr client)
   reader.construct(paneLayout, this);
 
   fetchChild<SliderBarWidget>("interfaceScaleSlider")->setRange(0, m_interfaceScaleList.size() - 1, 1);
+  fetchChild<SliderBarWidget>("hudInterfaceScaleSlider")->setRange(0, m_interfaceScaleList.size() - 1, 1);
   fetchChild<SliderBarWidget>("resSlider")->setRange(0, m_resList.size() - 1, 1);
   fetchChild<SliderBarWidget>("zoomSlider")->setRange(0, m_zoomList.size() - 1, 1);
   fetchChild<SliderBarWidget>("cameraSpeedSlider")->setRange(0, m_cameraSpeedList.size() - 1, 1);
@@ -159,6 +165,7 @@ void GraphicsMenu::toggleFullscreen() {
 StringList const GraphicsMenu::ConfigKeys = {
   "fullscreenResolution",
   "interfaceScale",
+  "hudInterfaceScale",
   "zoomLevel",
   "cameraSpeedFactor",
   "speechBubbles",
@@ -206,6 +213,17 @@ void GraphicsMenu::syncGui() {
     interfaceScaleSlider->setVal(m_interfaceScaleList.size() - 1);
   }
   fetchChild<LabelWidget>("interfaceScaleValueLabel")->setText(interfaceScale != 0 ? toString(interfaceScale) : "AUTO");
+
+  auto hudInterfaceScaleSlider = fetchChild<SliderBarWidget>("hudInterfaceScaleSlider");
+  auto hudInterfaceScale = m_localChanges.get("hudInterfaceScale").optFloat().value();
+  auto hudInterfaceScaleIt = std::lower_bound(m_interfaceScaleList.begin(), m_interfaceScaleList.end(), hudInterfaceScale);
+  if (hudInterfaceScaleIt != m_interfaceScaleList.end()) {
+    size_t scaleIndex = hudInterfaceScaleIt - m_interfaceScaleList.begin();
+    hudInterfaceScaleSlider->setVal(std::min(scaleIndex, m_interfaceScaleList.size() - 1), false);
+  } else {
+    hudInterfaceScaleSlider->setVal(m_interfaceScaleList.size() - 1);
+  }
+  fetchChild<LabelWidget>("hudInterfaceScaleValueLabel")->setText(hudInterfaceScale != 0 ? toString(hudInterfaceScale) : "UI");
 
   auto zoomSlider = fetchChild<SliderBarWidget>("zoomSlider");
   auto zoomLevel = m_localChanges.get("zoomLevel").toFloat();

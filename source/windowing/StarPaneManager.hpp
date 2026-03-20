@@ -72,9 +72,12 @@ public:
   // Returns the pane/widget that has captured the keyboard, if any.
   PanePtr keyboardCapturedPane() const;
   WidgetPtr keyboardCapturedWidget() const;
+  Maybe<pair<RectI, int>> keyboardCaptureArea() const;
   // Returns true if the current widget that has captured the keyboard is
   // accepting text input.
   bool keyboardCapturedForTextInput() const;
+
+  Vec2I panePosition(PanePtr const& pane, Vec2I const& screenPosition) const;
 
   bool sendInputEvent(InputEvent const& event);
 
@@ -82,13 +85,17 @@ public:
   void update(float dt);
 
 private:
-  Vec2I windowSize() const;
-  Vec2I calculatePaneOffset(PanePtr const& pane) const;
-  Vec2I calculateNewInterfacePosition(PanePtr const& pane, float interfaceScaleRatio) const;
+  float hudInterfaceScale() const;
+  float interfaceScale(PaneLayer paneLayer) const;
+  Maybe<PaneLayer> paneLayer(PanePtr const& pane) const;
+  Vec2I windowSize(PaneLayer paneLayer) const;
+  Vec2I panePosition(PaneLayer paneLayer, Vec2I const& screenPosition) const;
+  Vec2I calculatePaneOffset(PaneLayer paneLayer, PanePtr const& pane) const;
+  Vec2I calculateNewInterfacePosition(PaneLayer paneLayer, PanePtr const& pane, float interfaceScaleRatio) const;
   bool dismiss(PanePtr const& pane);
 
   GuiContext* m_context;
-  float m_prevInterfaceScale;
+  Map<PaneLayer, float> m_prevInterfaceScale;
 
   // Map of each pane layer, where the 0th pane is the topmost pane in each layer.
   Map<PaneLayer, OrderedMap<PanePtr, DismissCallback>> m_displayedPanes;
@@ -98,8 +105,8 @@ private:
   float m_tooltipMouseoverRadius;
   Vec2I m_tooltipMouseOffset;
   GameTimer m_tooltipShowTimer;
-  Vec2I m_tooltipLastMousePos;
-  Vec2I m_tooltipInitialPosition;
+  Vec2I m_tooltipLastMouseScreenPos;
+  Vec2I m_tooltipInitialScreenPos;
   PanePtr m_activeTooltip;
   PanePtr m_tooltipParentPane;
 };

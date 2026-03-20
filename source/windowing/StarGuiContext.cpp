@@ -30,6 +30,7 @@ GuiContext::GuiContext(MixerPtr mixer, ApplicationControllerPtr appController) {
   m_applicationController = std::move(appController);
 
   m_interfaceScale = 1;
+  m_interfaceScaleOverride = {};
 
   m_shiftHeld = false;
 
@@ -90,13 +91,28 @@ Vec2U GuiContext::windowInterfaceSize() const {
   return Vec2U::ceil(Vec2F(windowSize()) / interfaceScale());
 }
 
-float GuiContext::interfaceScale() const {
+float GuiContext::baseInterfaceScale() const {
+  return m_interfaceScale;
+}
+
+float GuiContext::effectiveInterfaceScale(float interfaceScale) const {
   float DisplayScale {std::max(1.0f, std::round(getDisplayScale()))};
-  return m_interfaceScale * DisplayScale;
+  return interfaceScale * DisplayScale;
+}
+
+float GuiContext::interfaceScale() const {
+  if (m_interfaceScaleOverride)
+    return *m_interfaceScaleOverride;
+
+  return effectiveInterfaceScale(m_interfaceScale);
 }
 
 void GuiContext::setInterfaceScale(float interfaceScale) {
   m_interfaceScale = interfaceScale;
+}
+
+void GuiContext::setInterfaceScaleOverride(Maybe<float> interfaceScaleOverride) {
+  m_interfaceScaleOverride = interfaceScaleOverride;
 }
 
 Maybe<Vec2I> GuiContext::mousePosition(InputEvent const& event, float pixelRatio) const {

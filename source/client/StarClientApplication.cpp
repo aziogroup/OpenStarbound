@@ -76,8 +76,9 @@ Json const AdditionalDefaultConfiguration = Json::parseJson(R"JSON(
       "antiAliasing" : false,
       "zoomLevel" : 3.0,
       "cameraSpeedFactor" : 1.0,
-      "cursorScale" : 1.0,
+      "cursorScale" : 0.0,
       "interfaceScale" : 0,
+      "hudInterfaceScale" : 0,
       "speechBubbles" : true,
 
       "title" : {
@@ -598,8 +599,8 @@ void ClientApplication::render() {
         // Cursor Scale
         {
           auto config = m_root->configuration();
-          float cursorScaleVal = config->get("cursorScale").optFloat().value(1.0f);
-          if (ImGui::SliderFloat("Cursor Scale", &cursorScaleVal, 0.5f, 4.0f, "%.1fx"))
+          float cursorScaleVal = config->get("cursorScale").optFloat().value(0.0f);
+          if (ImGui::SliderFloat("Cursor Scale", &cursorScaleVal, 0.0f, 4.0f, "+%.1f"))
             config->set("cursorScale", cursorScaleVal);
         }
 
@@ -1095,7 +1096,7 @@ void ClientApplication::updateTitle(float dt) {
   bool inputActive = m_titleScreen->textInputActive();
   m_input->setTextInputActive(inputActive);
   if (inputActive)
-    app->setTextArea(m_titleScreen->paneManager()->keyboardCapturedWidget()->keyboardCaptureArea());
+    app->setTextArea(m_titleScreen->paneManager()->keyboardCaptureArea());
   else
     app->setTextArea();
   app->setAcceptingTextInput(inputActive);
@@ -1409,7 +1410,7 @@ void ClientApplication::updateRunning(float dt) {
     bool inputActive = m_mainInterface->textInputActive();
     m_input->setTextInputActive(inputActive);
     if (inputActive)
-      app->setTextArea(m_mainInterface->paneManager()->keyboardCapturedWidget()->keyboardCaptureArea());
+      app->setTextArea(m_mainInterface->paneManager()->keyboardCaptureArea());
     else
       app->setTextArea();
     app->setAcceptingTextInput(inputActive);

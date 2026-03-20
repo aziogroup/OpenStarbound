@@ -46,8 +46,11 @@ public:
   Vec2U windowSize() const;
   Vec2U windowInterfaceSize() const;
 
+  float baseInterfaceScale() const;
+  float effectiveInterfaceScale(float interfaceScale) const;
   float interfaceScale() const;
   void setInterfaceScale(float interfaceScale);
+  void setInterfaceScaleOverride(Maybe<float> interfaceScaleOverride);
 
   Maybe<Vec2I> mousePosition(InputEvent const& event, float pixelRatio) const;
   Maybe<Vec2I> mousePosition(InputEvent const& event) const;
@@ -148,6 +151,7 @@ private:
   KeyBindings m_keyBindings;
 
   float m_interfaceScale;
+  Maybe<float> m_interfaceScaleOverride;
 
   bool m_shiftHeld;
 };

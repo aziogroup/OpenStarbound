@@ -753,7 +753,7 @@ void MainInterface::update(float dt) {
           worldName = worldTemplate->worldName();
 
         if (!worldName.empty()) {
-          m_planetText->parent()->setPosition(m_config->planetNameOffset * (2.f / interfaceScale()));
+          m_planetText->parent()->setPosition(m_config->planetNameOffset * (2.f / hudScale()));
           m_planetText->setText(strf(m_config->planetNameFormatString.utf8Ptr(), worldName));
           m_paneManager.displayRegisteredPane(MainInterfacePanes::PlanetText);
         }
@@ -1060,6 +1060,17 @@ PanePtr MainInterface::createEscapeDialog() {
   return escapeDialog;
 }
 
+float MainInterface::hudScale() const {
+  auto configuration = Root::singleton().configuration();
+  if (auto scale = configuration->get("hudInterfaceScale").optFloat().value(0.0f); scale != 0)
+    return m_guiContext->effectiveInterfaceScale(scale);
+
+  if (auto legacyScale = configuration->get("windowInterfaceScale").optFloat().value(0.0f); legacyScale != 0)
+    return m_guiContext->effectiveInterfaceScale(legacyScale);
+
+  return m_guiContext->interfaceScale();
+}
+
 float MainInterface::interfaceScale() const {
   return m_guiContext->interfaceScale();
 }
@@ -1073,18 +1084,18 @@ unsigned MainInterface::windowWidth() const {
 }
 
 Vec2F MainInterface::mainBarPosition() const {
-  return Vec2F(windowWidth(), windowHeight()) - Vec2F(m_config->mainBarSize) * interfaceScale();
+  return Vec2F(windowWidth(), windowHeight()) - Vec2F(m_config->mainBarSize) * hudScale();
 }
 
 void MainInterface::renderBreath() {
   auto assets = Root::singleton().assets();
   auto imgMetadata = Root::singleton().imageMetadataDatabase();
 
-  Vec2I breathBarSize = Vec2I(m_guiContext->textureSize("/interface/breath/empty.png")) * interfaceScale();
+  Vec2I breathBarSize = Vec2I(m_guiContext->textureSize("/interface/breath/empty.png")) * hudScale();
   Vec2I breathOffset = jsonToVec2I(assets->json("/interface.config:breathPos"));
 
-  Vec2F breathBackgroundCenterPos(windowWidth() * 0.5f + breathOffset[0] * interfaceScale(), windowHeight() - breathOffset[1] * interfaceScale());
-  Vec2F breathBarPos = breathBackgroundCenterPos + Vec2F(jsonToVec2I(assets->json("/interface.config:breathBarPos")) * interfaceScale());
+  Vec2F breathBackgroundCenterPos(windowWidth() * 0.5f + breathOffset[0] * hudScale(), windowHeight() - breathOffset[1] * hudScale());
+  Vec2F breathBarPos = breathBackgroundCenterPos + Vec2F(jsonToVec2I(assets->json("/interface.config:breathBarPos")) * hudScale());
 
   float breath = m_client->mainPlayer()->breath();
   float breathMax = m_client->mainPlayer()->maxBreath();
@@ -1093,15 +1104,15 @@ void MainInterface::renderBreath() {
 
   if (blocks < 10) {
     String breathPath = "/interface/breath/breath.png";
-    m_guiContext->drawQuad(breathPath, RectF::withCenter(breathBackgroundCenterPos, Vec2F(imgMetadata->imageSize(breathPath)) * interfaceScale()));
+    m_guiContext->drawQuad(breathPath, RectF::withCenter(breathBackgroundCenterPos, Vec2F(imgMetadata->imageSize(breathPath)) * hudScale()));
     for (size_t i = 0; i < 10; i++) {
       if (i >= blocks) {
         if (blocks == 0 && Time::monotonicMilliseconds() % 500 > 250)
-          m_guiContext->drawQuad("/interface/breath/warning.png", breathBarPos + Vec2F(breathBarSize[0] * i, 0), interfaceScale());
+          m_guiContext->drawQuad("/interface/breath/warning.png", breathBarPos + Vec2F(breathBarSize[0] * i, 0), hudScale());
         else
-          m_guiContext->drawQuad("/interface/breath/empty.png", breathBarPos + Vec2F(breathBarSize[0] * i, 0), interfaceScale());
+          m_guiContext->drawQuad("/interface/breath/empty.png", breathBarPos + Vec2F(breathBarSize[0] * i, 0), hudScale());
       } else {
-        m_guiContext->drawQuad("/interface/breath/breathbar.png", breathBarPos + Vec2F(breathBarSize[0] * i, 0), interfaceScale());
+        m_guiContext->drawQuad("/interface/breath/breathbar.png", breathBarPos + Vec2F(breathBarSize[0] * i, 0), hudScale());
       }
     }
   }
@@ -1125,10 +1136,10 @@ void MainInterface::renderMessages() {
     totalOffset += messageOffset;
     messageOffset = totalOffset + hiddenOffset;
 
-    Vec2F backgroundCenterPos = Vec2F(windowWidth() * 0.5f + messageOffset[0] * interfaceScale(), messageOffset[1] * interfaceScale());
+    Vec2F backgroundCenterPos = Vec2F(windowWidth() * 0.5f + messageOffset[0] * hudScale(), messageOffset[1] * hudScale());
 
-    Vec2F backgroundTextCenterPos = backgroundCenterPos + Vec2F(m_config->messageTextContainerOffset) * interfaceScale();
-    Vec2F messageTextOffset = backgroundTextCenterPos + Vec2F(m_config->messageTextOffset) * interfaceScale();
+    Vec2F backgroundTextCenterPos = backgroundCenterPos + Vec2F(m_config->messageTextContainerOffset) * hudScale();
+    Vec2F messageTextOffset = backgroundTextCenterPos + Vec2F(m_config->messageTextOffset) * hudScale();
 
     if (message->cooldown > m_config->messageHideTime)
       message->springState = (message->springState * m_config->messageWindowSpring + 1.0f) / (m_config->messageWindowSpring + 1.0f);
@@ -1136,7 +1147,7 @@ void MainInterface::renderMessages() {
       message->springState = (message->springState * m_config->messageWindowSpring) / (m_config->messageWindowSpring + 1.0f);
 
     m_guiContext->drawQuad(m_config->messageTextContainer,
-        RectF::withCenter(backgroundTextCenterPos, Vec2F(imgMetadata->imageSize(m_config->messageTextContainer)) * interfaceScale()));
+        RectF::withCenter(backgroundTextCenterPos, Vec2F(imgMetadata->imageSize(m_config->messageTextContainer)) * hudScale()));
 
     m_guiContext->setTextStyle(m_config->textStyle);
     m_guiContext->renderText(message->message, {messageTextOffset, HorizontalAnchor::HMidAnchor, VerticalAnchor::VMidAnchor});
@@ -1160,33 +1171,33 @@ void MainInterface::renderMonsterHealthBar() {
     Vec2F backgroundCenterPos = Vec2F(windowWidth() / 2.0f, windowHeight());
 
     auto container = assets->json("/interface.config:monsterHealth.container").toString();
-    auto offset = jsonToVec2F(assets->json("/interface.config:monsterHealth.offset")) * interfaceScale();
-    m_guiContext->drawQuad(container, RectF::withCenter(backgroundCenterPos + offset, Vec2F(imgMetadata->imageSize(container) * interfaceScale())));
+    auto offset = jsonToVec2F(assets->json("/interface.config:monsterHealth.offset")) * hudScale();
+    m_guiContext->drawQuad(container, RectF::withCenter(backgroundCenterPos + offset, Vec2F(imgMetadata->imageSize(container) * hudScale())));
 
-    auto nameTextOffset = jsonToVec2F(assets->json("/interface.config:monsterHealth.nameTextOffset")) * interfaceScale();
+    auto nameTextOffset = jsonToVec2F(assets->json("/interface.config:monsterHealth.nameTextOffset")) * hudScale();
     m_guiContext->setTextStyle(m_config->textStyle);
     m_guiContext->renderText(showDamageEntity->name(), backgroundCenterPos + nameTextOffset);
 
     auto empty = assets->json("/interface.config:monsterHealth.progressEmpty").toString();
     auto filled = assets->json("/interface.config:monsterHealth.progressFilled").toString();
-    auto progressBarOffset = jsonToVec2F(assets->json("/interface.config:monsterHealth.progressBarOffset")) * interfaceScale();
+    auto progressBarOffset = jsonToVec2F(assets->json("/interface.config:monsterHealth.progressBarOffset")) * hudScale();
     auto chunks = assets->json("/interface.config:monsterHealth.progressChunks").toInt();
     int blocks = round(showDamageEntity->health() / showDamageEntity->maxHealth() * chunks);
     Vec2F barPos = backgroundCenterPos + progressBarOffset;
-    Vec2F barItemOffset = Vec2F(imgMetadata->imageSize(filled)) * interfaceScale();
+    Vec2F barItemOffset = Vec2F(imgMetadata->imageSize(filled)) * hudScale();
     barItemOffset[1] = 0;
 
-    m_guiContext->drawQuad(empty, RectF::withSize(backgroundCenterPos + barPos, Vec2F(imgMetadata->imageSize(empty)) * interfaceScale()));
+    m_guiContext->drawQuad(empty, RectF::withSize(backgroundCenterPos + barPos, Vec2F(imgMetadata->imageSize(empty)) * hudScale()));
 
     for (int i = 0; i < blocks; i++)
-      m_guiContext->drawQuad(filled, barPos + barItemOffset * i, interfaceScale());
+      m_guiContext->drawQuad(filled, barPos + barItemOffset * i, hudScale());
 
-    auto portraitOffset = jsonToVec2F(assets->json("/interface.config:monsterHealth.portraitOffset")) * interfaceScale();
-    auto portraitScale = assets->json("/interface.config:monsterHealth.portraitScale").toFloat() * interfaceScale();
+    auto portraitOffset = jsonToVec2F(assets->json("/interface.config:monsterHealth.portraitOffset")) * hudScale();
+    auto portraitScale = assets->json("/interface.config:monsterHealth.portraitScale").toFloat() * hudScale();
 
-    auto portraitScissorRect = jsonToRectF(assets->json("/interface.config:monsterHealth.portraitScissorRect")).scaled(interfaceScale());
+    auto portraitScissorRect = jsonToRectF(assets->json("/interface.config:monsterHealth.portraitScissorRect")).scaled(hudScale());
     auto rect = portraitScissorRect.translated(backgroundCenterPos + portraitOffset);
-    m_guiContext->setInterfaceScissorRect(RectI(RectF(rect).scaled(1.0f / interfaceScale())));
+    m_guiContext->setInterfaceScissorRect(RectI(RectF(rect).scaled(1.0f / hudScale())));
     auto portraitMaxSize = jsonToVec2I(assets->json("/interface.config:monsterHealth.portraitMaxSize"));
     List<Drawable> portrait = showDamageEntity->portrait(PortraitMode::Full);
 
@@ -1214,28 +1225,28 @@ void MainInterface::renderSpecialDamageBar() {
   auto barConfig = assets->json("/interface.config:specialDamageBar");
 
   // hSpacing should be equivalent to the width of the full bar, plus a bit of spacing
-  float hSpacing = barConfig.getFloat("multibarSpacing",jsonToVec2F(barConfig.get("backgroundOffset")).x()*-2.0f) * interfaceScale();
+  float hSpacing = barConfig.getFloat("multibarSpacing",jsonToVec2F(barConfig.get("backgroundOffset")).x()*-2.0f) * hudScale();
 
   size_t i = 0;
   float totalWidth = hSpacing*num;
-  float maxWidth = std::min(totalWidth,windowWidth()-(barConfig.getFloat("multibarScreenEdgeOffset",20.0f)*interfaceScale()));
+  float maxWidth = std::min(totalWidth,windowWidth()-(barConfig.getFloat("multibarScreenEdgeOffset",20.0f)*hudScale()));
   float hScale = maxWidth/totalWidth;//1.0f/num;
 
   float allOffset = -hSpacing*0.5f*(num-1);
   float center = windowWidth()/2.0f;
 
   auto background = barConfig.getString("background");
-  auto backgroundOffset = jsonToVec2F(barConfig.get("backgroundOffset")) * interfaceScale();
+  auto backgroundOffset = jsonToVec2F(barConfig.get("backgroundOffset")) * hudScale();
   backgroundOffset.setX(backgroundOffset.x()*hScale);
 
-  auto backgroundImageSize = Vec2F(imgMetadata->imageSize(background)) * interfaceScale();
+  auto backgroundImageSize = Vec2F(imgMetadata->imageSize(background)) * hudScale();
   backgroundImageSize.setX(backgroundImageSize.x()*hScale);
 
   auto fill = barConfig.getString("fill");
-  auto fillOffset = jsonToVec2F(barConfig.get("fillOffset")) * interfaceScale();
+  auto fillOffset = jsonToVec2F(barConfig.get("fillOffset")) * hudScale();
   fillOffset.setX(fillOffset.x()*hScale);
 
-  auto nameOffset = jsonToVec2F(barConfig.get("nameOffset")) * interfaceScale();
+  auto nameOffset = jsonToVec2F(barConfig.get("nameOffset")) * hudScale();
   nameOffset.setX(nameOffset.x()*hScale);
 
   for (auto& bar : m_specialDamageBars) {
@@ -1249,7 +1260,7 @@ void MainInterface::renderSpecialDamageBar() {
         Vec2F size = Vec2F(barConfig.getInt("fillWidth") * bar.second, imgMetadata->imageSize(fill).y());
         size.setX(size.x()*hScale);
 
-        m_guiContext->drawQuad(fill, RectF::withSize(bottomCenter + fillOffset, size * interfaceScale()));
+        m_guiContext->drawQuad(fill, RectF::withSize(bottomCenter + fillOffset, size * hudScale()));
 
         m_guiContext->setFontColor(jsonToColor(barConfig.get("nameColor")).toRgba());
         m_guiContext->setFontSize(barConfig.getUInt("nameSize"));
@@ -1269,45 +1280,45 @@ void MainInterface::renderMainBar() {
 
   auto assets = Root::singleton().assets();
 
-  Vec2F inventoryButtonPos = barPos + Vec2F(m_config->mainBarInventoryButtonOffset) * interfaceScale();
+  Vec2F inventoryButtonPos = barPos + Vec2F(m_config->mainBarInventoryButtonOffset) * hudScale();
   if (m_paneManager.registeredPaneIsDisplayed(MainInterfacePanes::Inventory)) {
     if (overButton(m_config->mainBarInventoryButtonPoly, m_cursorScreenPos)) {
-      m_guiContext->drawQuad(m_config->inventoryImageOpenHover, Vec2F(inventoryButtonPos), interfaceScale());
+      m_guiContext->drawQuad(m_config->inventoryImageOpenHover, Vec2F(inventoryButtonPos), hudScale());
       m_cursorTooltip = assets->json("/interface.config:cursorTooltip.inventoryText").toString();
     } else {
-      m_guiContext->drawQuad(m_config->inventoryImageOpen, Vec2F(inventoryButtonPos), interfaceScale());
+      m_guiContext->drawQuad(m_config->inventoryImageOpen, Vec2F(inventoryButtonPos), hudScale());
     }
   } else if (overButton(m_config->mainBarInventoryButtonPoly, m_cursorScreenPos)) {
     if (m_inventoryWindow->containsNewItems())
-      m_guiContext->drawQuad(m_config->inventoryImageGlowHover, Vec2F(inventoryButtonPos), interfaceScale());
+      m_guiContext->drawQuad(m_config->inventoryImageGlowHover, Vec2F(inventoryButtonPos), hudScale());
     else
-      m_guiContext->drawQuad(m_config->inventoryImageHover, Vec2F(inventoryButtonPos), interfaceScale());
+      m_guiContext->drawQuad(m_config->inventoryImageHover, Vec2F(inventoryButtonPos), hudScale());
     m_cursorTooltip = assets->json("/interface.config:cursorTooltip.inventoryText").toString();
   } else {
     if (m_inventoryWindow->containsNewItems())
-      m_guiContext->drawQuad(m_config->inventoryImageGlow, Vec2F(inventoryButtonPos), interfaceScale());
+      m_guiContext->drawQuad(m_config->inventoryImageGlow, Vec2F(inventoryButtonPos), hudScale());
     else
-      m_guiContext->drawQuad(m_config->inventoryImage, Vec2F(inventoryButtonPos), interfaceScale());
+      m_guiContext->drawQuad(m_config->inventoryImage, Vec2F(inventoryButtonPos), hudScale());
   }
 
   auto drawStateButton = [this](MainInterfacePanes paneType, Vec2F pos, PolyI poly,
       String image, String hoverImage, String openImage, String hoverOpenImage, String toolTip) {
     if (m_paneManager.registeredPaneIsDisplayed(paneType)) {
       if (overButton(poly, m_cursorScreenPos)) {
-        m_guiContext->drawQuad(hoverOpenImage, pos, interfaceScale());
+        m_guiContext->drawQuad(hoverOpenImage, pos, hudScale());
         m_cursorTooltip = toolTip;
       } else {
-        m_guiContext->drawQuad(openImage, pos, interfaceScale());
+        m_guiContext->drawQuad(openImage, pos, hudScale());
       }
     } else if (overButton(poly, m_cursorScreenPos)) {
-      m_guiContext->drawQuad(hoverImage, pos, interfaceScale());
+      m_guiContext->drawQuad(hoverImage, pos, hudScale());
       m_cursorTooltip = toolTip;
     } else {
-      m_guiContext->drawQuad(image, pos, interfaceScale());
+      m_guiContext->drawQuad(image, pos, hudScale());
     }
   };
 
-  Vec2F craftButtonPos = barPos + Vec2F(m_config->mainBarCraftButtonOffset) * interfaceScale();
+  Vec2F craftButtonPos = barPos + Vec2F(m_config->mainBarCraftButtonOffset) * hudScale();
   drawStateButton(MainInterfacePanes::CraftingPlain,
       craftButtonPos,
       m_config->mainBarCraftButtonPoly,
@@ -1317,7 +1328,7 @@ void MainInterface::renderMainBar() {
       m_config->craftImageOpenHover,
       assets->json("/interface.config:cursorTooltip.craftingText").toString());
 
-  Vec2F codexButtonPos = barPos + Vec2F(m_config->mainBarCodexButtonOffset) * interfaceScale();
+  Vec2F codexButtonPos = barPos + Vec2F(m_config->mainBarCodexButtonOffset) * hudScale();
   drawStateButton(MainInterfacePanes::Codex,
       codexButtonPos,
       m_config->mainBarCodexButtonPoly,
@@ -1327,7 +1338,7 @@ void MainInterface::renderMainBar() {
       m_config->codexImageHoverOpen,
       assets->json("/interface.config:cursorTooltip.codexText").toString());
 
-  Vec2F mmUpgradeButtonPos = barPos + Vec2F(m_config->mainBarMmUpgradeButtonOffset) * interfaceScale();
+  Vec2F mmUpgradeButtonPos = barPos + Vec2F(m_config->mainBarMmUpgradeButtonOffset) * hudScale();
   if (m_client->mainPlayer()->inventory()->essentialItem(EssentialItem::BeamAxe)) {
     drawStateButton(MainInterfacePanes::MmUpgrade,
         mmUpgradeButtonPos,
@@ -1348,7 +1359,7 @@ void MainInterface::renderMainBar() {
         assets->json("/interface.config:cursorTooltip.disabledText").toString());
   }
 
-  Vec2F collectionsButtonPos = barPos + Vec2F(m_config->mainBarCollectionsButtonOffset) * interfaceScale();
+  Vec2F collectionsButtonPos = barPos + Vec2F(m_config->mainBarCollectionsButtonOffset) * hudScale();
   drawStateButton(MainInterfacePanes::Collections,
     collectionsButtonPos,
     m_config->mainBarCollectionsButtonPoly,
@@ -1363,36 +1374,36 @@ void MainInterface::renderMainBar() {
   // when the player can only deploy, only show deploy button
   // when the player can deploy or beam down, show both buttons
 
-  Vec2F deployButtonPos(Vec2F(barPos) + Vec2F(m_config->mainBarDeployButtonOffset) * interfaceScale());
+  Vec2F deployButtonPos(Vec2F(barPos) + Vec2F(m_config->mainBarDeployButtonOffset) * hudScale());
   if (m_client->canBeamUp()) {
     if (overButton(m_config->mainBarDeployButtonPoly, m_cursorScreenPos)) {
-      m_guiContext->drawQuad(m_config->beamUpImageHover, deployButtonPos, interfaceScale());
+      m_guiContext->drawQuad(m_config->beamUpImageHover, deployButtonPos, hudScale());
       m_cursorTooltip = assets->json("/interface.config:cursorTooltip.beamUpText").toString();
     } else {
-      m_guiContext->drawQuad(m_config->beamUpImage, deployButtonPos, interfaceScale());
+      m_guiContext->drawQuad(m_config->beamUpImage, deployButtonPos, hudScale());
     }
   } else if (m_client->canBeamDown(true)) {
     if (overButton(m_config->mainBarDeployButtonPoly, m_cursorScreenPos)) {
-      m_guiContext->drawQuad(m_config->deployImageHover, deployButtonPos, interfaceScale());
+      m_guiContext->drawQuad(m_config->deployImageHover, deployButtonPos, hudScale());
       m_cursorTooltip = assets->json("/interface.config:cursorTooltip.deployText").toString();
     } else {
-      m_guiContext->drawQuad(m_config->deployImage, deployButtonPos, interfaceScale());
+      m_guiContext->drawQuad(m_config->deployImage, deployButtonPos, hudScale());
     }
   } else {
-    m_guiContext->drawQuad(m_config->deployImageDisabled, deployButtonPos, interfaceScale());
+    m_guiContext->drawQuad(m_config->deployImageDisabled, deployButtonPos, hudScale());
   }
 
-  Vec2F beamButtonPos(Vec2F(barPos) + Vec2F(m_config->mainBarBeamButtonOffset) * interfaceScale());
+  Vec2F beamButtonPos(Vec2F(barPos) + Vec2F(m_config->mainBarBeamButtonOffset) * hudScale());
   if (m_client->canBeamDown()) {
     if (overButton(m_config->mainBarBeamButtonPoly, m_cursorScreenPos)) {
-      m_guiContext->drawQuad(m_config->beamDownImageHover, beamButtonPos, interfaceScale());
+      m_guiContext->drawQuad(m_config->beamDownImageHover, beamButtonPos, hudScale());
       m_cursorTooltip = assets->json("/interface.config:cursorTooltip.beamDownText").toString();
     } else {
-      m_guiContext->drawQuad(m_config->beamDownImage, beamButtonPos, interfaceScale());
+      m_guiContext->drawQuad(m_config->beamDownImage, beamButtonPos, hudScale());
     }
   }
 
-  Vec2F questLogButtonPos = barPos + Vec2F(m_config->mainBarQuestLogButtonOffset) * interfaceScale();
+  Vec2F questLogButtonPos = barPos + Vec2F(m_config->mainBarQuestLogButtonOffset) * hudScale();
   drawStateButton(MainInterfacePanes::QuestLog,
       questLogButtonPos,
       m_config->mainBarQuestLogButtonPoly,
@@ -1432,7 +1443,7 @@ void MainInterface::renderDebug() {
 
     int counter = 0;
     for (auto const& pair : logMapValues) {
-      TextPositioning positioning = { Vec2F(m_config->debugOffset[0], windowHeight() - m_config->debugOffset[1] - m_config->textStyle.fontSize * interfaceScale() * counter++) };
+      TextPositioning positioning = { Vec2F(m_config->debugOffset[0], windowHeight() - m_config->debugOffset[1] - m_config->textStyle.fontSize * hudScale() * counter++) };
       String& text = formatted.emplace_back(strf("{}^lightgray;:^green,set; {}", pair.first, pair.second));
       m_debugTextRect.combine(m_guiContext->determineTextSize(text, positioning).padded(m_config->debugBackgroundPad));
     }
@@ -1447,7 +1458,7 @@ void MainInterface::renderDebug() {
     m_debugTextRect = RectF::null();
 
     for (size_t index = 0; index != formatted.size(); ++index) {
-      TextPositioning positioning = { Vec2F(m_config->debugOffset[0], windowHeight() - m_config->debugOffset[1] - m_config->textStyle.fontSize * interfaceScale() * index) };
+      TextPositioning positioning = { Vec2F(m_config->debugOffset[0], windowHeight() - m_config->debugOffset[1] - m_config->textStyle.fontSize * hudScale() * index) };
       m_guiContext->renderText(formatted[index], positioning);
     }
   }
@@ -1499,8 +1510,8 @@ void MainInterface::updateCursor() {
   Maybe<String> cursorOverride = m_actionBar->cursorOverride(m_cursorScreenIPos);
 
   if (!cursorOverride) {
-    if (auto pane = m_paneManager.getPaneAt(m_cursorScreenIPos / interfaceScale())) {
-      cursorOverride = cursorOverride.orMaybe(pane->cursorOverride(m_cursorScreenIPos / interfaceScale()));
+    if (auto pane = m_paneManager.getPaneAt(m_cursorScreenIPos)) {
+      cursorOverride = cursorOverride.orMaybe(pane->cursorOverride(m_paneManager.panePosition(pane, m_cursorScreenIPos)));
     } else {
       auto player = m_client->mainPlayer();
       if (auto anchorState = m_client->mainPlayer()->loungingIn()) {
@@ -1540,7 +1551,7 @@ void MainInterface::renderCursor() {
   Vec2I cursorSize = m_cursor.size();
   Vec2I cursorOffset = m_cursor.offset();
   float cursorScale = m_cursor.scale(interfaceScale())
-      * Root::singleton().configuration()->get("cursorScale").optFloat().value(1.0f);
+      + Root::singleton().configuration()->get("cursorScale").optFloat().value(0.0f);
   Drawable cursorDrawable = m_cursor.drawable();
 
   cursorPos[0] -= cursorOffset[0] * cursorScale;
@@ -1589,7 +1600,7 @@ bool MainInterface::overButton(PolyI const& buttonPoly, Vec2F const& mousePos) c
   Vec2F barPos = mainBarPosition();
   PolyF poly(buttonPoly);
   poly.translate(barPos);
-  poly.scale(interfaceScale(), Vec2F(barPos));
+  poly.scale(hudScale(), Vec2F(barPos));
   return poly.contains(mousePos);
 }
 
@@ -1597,7 +1608,7 @@ bool MainInterface::overlayClick(Vec2F const& mousePos, MouseButton) {
   PolyF mainBarPoly = (PolyF)m_config->mainBarPoly;
   Vec2F barPos = mainBarPosition();
   mainBarPoly.translate(barPos);
-  mainBarPoly.scale(interfaceScale(), Vec2F(barPos));
+  mainBarPoly.scale(hudScale(), Vec2F(barPos));
 
   if (overButton(m_config->mainBarInventoryButtonPoly, mousePos)) {
     m_paneManager.toggleRegisteredPane(MainInterfacePanes::Inventory);

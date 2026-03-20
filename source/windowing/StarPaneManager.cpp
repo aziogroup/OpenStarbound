@@ -6,6 +6,23 @@
 
 namespace Star {
 
+namespace {
+
+struct InterfaceScaleOverride {
+  InterfaceScaleOverride(GuiContext* context, float interfaceScale)
+    : m_context(context) {
+    m_context->setInterfaceScaleOverride(interfaceScale);
+  }
+
+  ~InterfaceScaleOverride() {
+    m_context->setInterfaceScaleOverride({});
+  }
+
+  GuiContext* m_context;
+};
+
+}
+
 EnumMap<PaneLayer> const PaneLayerNames{
   {PaneLayer::Tooltip, "Tooltip"},
   {PaneLayer::ModalWindow, "ModalWindow"},
@@ -15,11 +32,14 @@ EnumMap<PaneLayer> const PaneLayerNames{
 };
 
 PaneManager::PaneManager()
-  : m_context(GuiContext::singletonPtr()), m_prevInterfaceScale(1) {
+  : m_context(GuiContext::singletonPtr()) {
   auto assets = Root::singleton().assets();
   m_tooltipMouseoverRadius = assets->json("/panes.config:tooltipMouseoverRadius").toFloat();
   m_tooltipMouseOffset = jsonToVec2I(assets->json("/panes.config:tooltipMouseoverOffset"));
   m_tooltipShowTimer = GameTimer(assets->json("/panes.config:tooltipMouseoverTime").toFloat());
+
+  for (auto const& paneLayer : PaneLayerNames)
+    m_prevInterfaceScale.set(paneLayer.first, interfaceScale(paneLayer.first));
 }
 
 void PaneManager::displayPane(PaneLayer paneLayer, PanePtr const& pane, DismissCallback onDismiss) {
@@ -27,7 +47,7 @@ void PaneManager::displayPane(PaneLayer paneLayer, PanePtr const& pane, DismissC
     throw GuiException("Pane displayed twice in PaneManager::displayPane");
 
   if (!pane->hasDisplayed() && pane->anchor() == PaneAnchor::None)
-    pane->setPosition(Vec2I((windowSize() - pane->size()) / 2) + pane->centerOffset()); // center it
+    pane->setPosition(Vec2I((windowSize(paneLayer) - pane->size()) / 2) + pane->centerOffset()); // center it
 
   pane->displayed();
 }
@@ -89,13 +109,14 @@ void PaneManager::bringToTop(PanePtr const& pane) {
 
 void PaneManager::bringPaneAdjacent(PanePtr const& anchor, PanePtr const& adjacent, int gap) {
   Vec2I centerAdjacent = anchor->position() + (anchor->size() / 2) - (adjacent->size() / 2);
-  centerAdjacent = centerAdjacent.piecewiseClamp(Vec2I(), windowSize() - adjacent->size()); // keeps pane inside window
+  auto adjacentLayer = paneLayer(adjacent).value(PaneLayer::Window);
+  centerAdjacent = centerAdjacent.piecewiseClamp(Vec2I(), windowSize(adjacentLayer) - adjacent->size()); // keeps pane inside window
 
-  if (anchor->position()[0] + anchor->size()[0] + gap + adjacent->size()[0] <= windowSize()[0])
+  if (anchor->position()[0] + anchor->size()[0] + gap + adjacent->size()[0] <= windowSize(adjacentLayer)[0])
     adjacent->setPosition(Vec2I(anchor->position()[0] + anchor->size()[0] + gap, centerAdjacent[1])); // place to the right
   else if (anchor->position()[0] - gap - adjacent->size()[0] >= 0)
     adjacent->setPosition(Vec2I(anchor->position()[0] - gap - adjacent->size()[0], centerAdjacent[1])); // place to the left
-  else if (anchor->position()[1] + anchor->size()[1] + gap + adjacent->size()[1] <= windowSize()[1])
+  else if (anchor->position()[1] + anchor->size()[1] + gap + adjacent->size()[1] <= windowSize(adjacentLayer)[1])
     adjacent->setPosition(Vec2I(centerAdjacent[0], anchor->position()[1] + anchor->size()[1] + gap)); // place above
   else if (anchor->position()[1] - gap - adjacent->size()[1] >= 0)
     adjacent->setPosition(Vec2I(centerAdjacent[0], anchor->position()[1] - gap - adjacent->size()[1])); // place below
@@ -111,7 +132,7 @@ PanePtr PaneManager::getPaneAt(Set<PaneLayer> const& paneLayers, Vec2I const& po
       continue;
 
     for (auto const& panePair : layerPair.second) {
-      if (panePair.first->inWindow(position) && panePair.first->active())
+      if (panePair.first->inWindow(panePosition(layerPair.first, position)) && panePair.first->active())
         return panePair.first;
     }
   }
@@ -123,7 +144,7 @@ PanePtr PaneManager::getPaneAt(Vec2I const& position) const {
   for (auto const& layerPair : m_displayedPanes) {
     for (auto const& panePair : layerPair.second) {
       if (panePair.first != m_activeTooltip
-        && panePair.first->inWindow(position)
+        && panePair.first->inWindow(panePosition(layerPair.first, position))
         && panePair.first->active())
         return panePair.first;
     }
@@ -186,20 +207,42 @@ WidgetPtr PaneManager::keyboardCapturedWidget() const {
   return {};
 }
 
+Maybe<pair<RectI, int>> PaneManager::keyboardCaptureArea() const {
+  for (auto const& layerPair : m_displayedPanes) {
+    for (auto const& panePair : layerPair.second) {
+      if (auto capturer = panePair.first->keyboardCapturer()) {
+        InterfaceScaleOverride interfaceScaleOverride(m_context, interfaceScale(layerPair.first));
+        return capturer->keyboardCaptureArea();
+      }
+    }
+  }
+
+  return {};
+}
+
 bool PaneManager::keyboardCapturedForTextInput() const {
   if (auto widget = keyboardCapturedWidget())
     return widget->keyboardCaptureMode() == KeyboardCaptureMode::TextInput;
   return false;
 }
 
+Vec2I PaneManager::panePosition(PanePtr const& pane, Vec2I const& screenPosition) const {
+  if (auto currentLayer = paneLayer(pane))
+    return panePosition(*currentLayer, screenPosition);
+
+  return panePosition(PaneLayer::Window, screenPosition);
+}
+
 bool PaneManager::sendInputEvent(InputEvent const& event) {
+  auto mouseScreenPosition = m_context->mousePosition(event, 1.0f);
+
   if (event.is<MouseMoveEvent>()) {
-    m_tooltipLastMousePos = *m_context->mousePosition(event);
+    m_tooltipLastMouseScreenPos = *mouseScreenPosition;
 
     for (auto const& layerPair : m_displayedPanes) {
       for (auto const& panePair : layerPair.second) {
         if (panePair.first->dragActive()) {
-          panePair.first->drag(*m_context->mousePosition(event));
+          panePair.first->drag(panePosition(layerPair.first, *mouseScreenPosition));
           return true;
         }
       }
@@ -241,12 +284,18 @@ bool PaneManager::sendInputEvent(InputEvent const& event) {
   // If there is a pane that has captured the keyboard, keyboard events will
   // ONLY be sent to it.
   auto keyCapturePane = keyboardCapturedPane();
-  if (keyCapturePane && (event.is<KeyDownEvent>() || event.is<KeyUpEvent>() || event.is<TextInputEvent>()))
+  if (keyCapturePane && (event.is<KeyDownEvent>() || event.is<KeyUpEvent>() || event.is<TextInputEvent>())) {
+    if (auto currentLayer = paneLayer(keyCapturePane)) {
+      InterfaceScaleOverride interfaceScaleOverride(m_context, interfaceScale(*currentLayer));
+      return keyCapturePane->sendEvent(event);
+    }
     return keyCapturePane->sendEvent(event);
+  }
 
   bool foundModal = false;
   for (auto& layerPair : m_displayedPanes) {
     for (auto const& panePair : copy(layerPair.second)) {
+      InterfaceScaleOverride interfaceScaleOverride(m_context, interfaceScale(layerPair.first));
       if (panePair.first->sendEvent(event)) {
         if (event.is<MouseButtonDownEvent>())
           layerPair.second.toFront(panePair.first);
@@ -269,35 +318,40 @@ bool PaneManager::sendInputEvent(InputEvent const& event) {
 
 void PaneManager::render() {
   if (m_backgroundWidget) {
+    InterfaceScaleOverride interfaceScaleOverride(m_context, interfaceScale(PaneLayer::Window));
     auto size = m_backgroundWidget->size();
-    m_backgroundWidget->setPosition(Vec2I((windowSize()[0] - size[0]) / 2, (windowSize()[1] - size[1]) / 2));
-    m_backgroundWidget->render(RectI(Vec2I(), windowSize()));
+    auto backgroundWindowSize = windowSize(PaneLayer::Window);
+    m_backgroundWidget->setPosition(Vec2I((backgroundWindowSize[0] - size[0]) / 2, (backgroundWindowSize[1] - size[1]) / 2));
+    m_backgroundWidget->render(RectI(Vec2I(), backgroundWindowSize));
   }
 
   for (auto const& layerPair : reverseIterate(m_displayedPanes)) {
+    float layerInterfaceScale = interfaceScale(layerPair.first);
+    float previousInterfaceScale = m_prevInterfaceScale.get(layerPair.first);
     for (auto const& panePair : reverseIterate(layerPair.second)) {
       if (panePair.first->active()) {
-        if (m_prevInterfaceScale != m_context->interfaceScale())
+        if (previousInterfaceScale != layerInterfaceScale)
           panePair.first->setPosition(
-              calculateNewInterfacePosition(panePair.first, (float)m_context->interfaceScale() / m_prevInterfaceScale));
+              calculateNewInterfacePosition(layerPair.first, panePair.first, layerInterfaceScale / previousInterfaceScale));
 
-        panePair.first->setDrawingOffset(calculatePaneOffset(panePair.first));
-        panePair.first->render(RectI(Vec2I(), windowSize()));
+        panePair.first->setDrawingOffset(calculatePaneOffset(layerPair.first, panePair.first));
+        InterfaceScaleOverride interfaceScaleOverride(m_context, layerInterfaceScale);
+        panePair.first->render(RectI(Vec2I(), windowSize(layerPair.first)));
       }
     }
+    m_prevInterfaceScale.set(layerPair.first, layerInterfaceScale);
   }
 
   m_context->resetInterfaceScissorRect();
-  m_prevInterfaceScale = m_context->interfaceScale();
 }
 
 void PaneManager::update(float dt) {
-  auto newTooltipParentPane = getPaneAt(m_tooltipLastMousePos);
+  auto newTooltipParentPane = getPaneAt(m_tooltipLastMouseScreenPos);
 
   bool updateTooltip = m_tooltipShowTimer.tick(dt) || (m_activeTooltip && (
-    vmag(m_tooltipInitialPosition - m_tooltipLastMousePos) > m_tooltipMouseoverRadius
+    vmag(m_tooltipInitialScreenPos - m_tooltipLastMouseScreenPos) > m_tooltipMouseoverRadius
     || m_tooltipParentPane != newTooltipParentPane
-    || !m_tooltipParentPane->inWindow(m_tooltipLastMousePos))); 
+    || !m_tooltipParentPane->inWindow(panePosition(m_tooltipParentPane, m_tooltipLastMouseScreenPos)))); 
 
   if (updateTooltip) {
     if (m_activeTooltip) {
@@ -308,30 +362,31 @@ void PaneManager::update(float dt) {
 
     m_tooltipShowTimer.reset();
     if (newTooltipParentPane) {
-      if (auto tooltip = newTooltipParentPane->createTooltip(m_tooltipLastMousePos)) {
+      if (auto tooltip = newTooltipParentPane->createTooltip(panePosition(newTooltipParentPane, m_tooltipLastMouseScreenPos))) {
         m_activeTooltip = std::move(tooltip);
         m_tooltipParentPane = std::move(newTooltipParentPane);
-        m_tooltipInitialPosition = m_tooltipLastMousePos;
+        m_tooltipInitialScreenPos = m_tooltipLastMouseScreenPos;
         displayPane(PaneLayer::Tooltip, m_activeTooltip);
       }
     }
   }
 
   if (m_activeTooltip) {
+    auto tooltipMousePosition = panePosition(PaneLayer::Tooltip, m_tooltipLastMouseScreenPos);
     Vec2I offsetDirection = Vec2I::filled(1);
     Vec2I offsetAdjust = Vec2I();
 
-    if (m_tooltipLastMousePos[0] + m_tooltipMouseOffset[0] + m_activeTooltip->size()[0] > (int)m_context->windowWidth() / m_context->interfaceScale()) {
+    if (tooltipMousePosition[0] + m_tooltipMouseOffset[0] + m_activeTooltip->size()[0] > windowSize(PaneLayer::Tooltip)[0]) {
       offsetDirection[0] = -1;
       offsetAdjust[0] = -m_activeTooltip->size()[0];
     }
 
-    if (m_tooltipLastMousePos[1] + m_tooltipMouseOffset[1] - m_activeTooltip->size()[1] < 0)
+    if (tooltipMousePosition[1] + m_tooltipMouseOffset[1] - m_activeTooltip->size()[1] < 0)
       offsetDirection[1] = -1;
     else
       offsetAdjust[1] = -m_activeTooltip->size()[1];
 
-    m_activeTooltip->setPosition(m_tooltipLastMousePos + (offsetAdjust + m_tooltipMouseOffset.piecewiseMultiply(offsetDirection)));
+    m_activeTooltip->setPosition(tooltipMousePosition + (offsetAdjust + m_tooltipMouseOffset.piecewiseMultiply(offsetDirection)));
   }
 
   for (auto const& layerPair : m_displayedPanes) {
@@ -343,6 +398,7 @@ void PaneManager::update(float dt) {
 
   for (auto const& layerPair : reverseIterate(m_displayedPanes)) {
     for (auto const& panePair : reverseIterate(layerPair.second)) {
+      InterfaceScaleOverride interfaceScaleOverride(m_context, interfaceScale(layerPair.first));
       panePair.first->tick(dt);
       if (panePair.first->active())
         panePair.first->update(dt);
@@ -350,45 +406,76 @@ void PaneManager::update(float dt) {
   }
 }
 
-Vec2I PaneManager::windowSize() const {
-  return Vec2I(m_context->windowInterfaceSize());
+float PaneManager::hudInterfaceScale() const {
+  auto configuration = Root::singleton().configuration();
+  if (auto scale = configuration->get("hudInterfaceScale").optFloat().value(0.0f); scale != 0)
+    return scale;
+
+  if (auto legacyScale = configuration->get("windowInterfaceScale").optFloat().value(0.0f); legacyScale != 0)
+    return legacyScale;
+
+  return m_context->baseInterfaceScale();
 }
 
-Vec2I PaneManager::calculatePaneOffset(PanePtr const& pane) const {
+float PaneManager::interfaceScale(PaneLayer paneLayer) const {
+  float scale = paneLayer == PaneLayer::Hud ? hudInterfaceScale() : m_context->baseInterfaceScale();
+  return m_context->effectiveInterfaceScale(scale);
+}
+
+Maybe<PaneLayer> PaneManager::paneLayer(PanePtr const& pane) const {
+  for (auto const& layerPair : m_displayedPanes) {
+    if (layerPair.second.contains(pane))
+      return layerPair.first;
+  }
+
+  return {};
+}
+
+Vec2I PaneManager::windowSize(PaneLayer paneLayer) const {
+  return Vec2I::ceil(Vec2F(m_context->windowSize()) / interfaceScale(paneLayer));
+}
+
+Vec2I PaneManager::panePosition(PaneLayer paneLayer, Vec2I const& screenPosition) const {
+  return Vec2I(Vec2F(screenPosition) / interfaceScale(paneLayer));
+}
+
+Vec2I PaneManager::calculatePaneOffset(PaneLayer paneLayer, PanePtr const& pane) const {
   Vec2I size = pane->size();
+  auto currentWindowSize = windowSize(paneLayer);
   switch (pane->anchor()) {
     case PaneAnchor::None:
       return pane->anchorOffset();
     case PaneAnchor::BottomLeft:
       return pane->anchorOffset();
     case PaneAnchor::BottomRight:
-      return pane->anchorOffset() + Vec2I{windowSize()[0] - size[0], 0};
+      return pane->anchorOffset() + Vec2I{currentWindowSize[0] - size[0], 0};
     case PaneAnchor::TopLeft:
-      return pane->anchorOffset() + Vec2I{0, windowSize()[1] - size[1]};
+      return pane->anchorOffset() + Vec2I{0, currentWindowSize[1] - size[1]};
     case PaneAnchor::TopRight:
-      return pane->anchorOffset() + (windowSize() - size);
+      return pane->anchorOffset() + (currentWindowSize - size);
     case PaneAnchor::CenterTop:
-      return pane->anchorOffset() + Vec2I{(windowSize()[0] - size[0]) / 2, windowSize()[1] - size[1]};
+      return pane->anchorOffset() + Vec2I{(currentWindowSize[0] - size[0]) / 2, currentWindowSize[1] - size[1]};
     case PaneAnchor::CenterBottom:
-      return pane->anchorOffset() + Vec2I{(windowSize()[0] - size[0]) / 2, 0};
+      return pane->anchorOffset() + Vec2I{(currentWindowSize[0] - size[0]) / 2, 0};
     case PaneAnchor::CenterLeft:
-      return pane->anchorOffset() + Vec2I{0, (windowSize()[1] - size[1]) / 2};
+      return pane->anchorOffset() + Vec2I{0, (currentWindowSize[1] - size[1]) / 2};
     case PaneAnchor::CenterRight:
-      return pane->anchorOffset() + Vec2I{windowSize()[0] - size[0], (windowSize()[1] - size[1]) / 2};
+      return pane->anchorOffset() + Vec2I{currentWindowSize[0] - size[0], (currentWindowSize[1] - size[1]) / 2};
     case PaneAnchor::Center:
-      return pane->anchorOffset() + ((windowSize() - size) / 2);
+      return pane->anchorOffset() + ((currentWindowSize - size) / 2);
     default:
       return pane->anchorOffset();
   }
 }
 
-Vec2I PaneManager::calculateNewInterfacePosition(PanePtr const& pane, float interfaceScaleRatio) const {
+Vec2I PaneManager::calculateNewInterfacePosition(PaneLayer paneLayer, PanePtr const& pane, float interfaceScaleRatio) const {
   Vec2F position(pane->relativePosition());
   Vec2F size(pane->size());
+  Vec2F currentWindowSize(windowSize(paneLayer));
   Mat3F scale;
   switch (pane->anchor()) {
     case PaneAnchor::None:
-      scale = Mat3F::scaling(interfaceScaleRatio, Vec2F(windowSize()) / 2);
+      scale = Mat3F::scaling(interfaceScaleRatio, currentWindowSize / 2);
       break;
     case PaneAnchor::BottomLeft:
       scale = Mat3F::scaling(interfaceScaleRatio);
@@ -418,7 +505,7 @@ Vec2I PaneManager::calculateNewInterfacePosition(PanePtr const& pane, float inte
       scale = Mat3F::scaling(interfaceScaleRatio, size / 2);
       break;
     default:
-      scale = Mat3F::scaling(interfaceScaleRatio, Vec2F(windowSize()) / 2);
+      scale = Mat3F::scaling(interfaceScaleRatio, currentWindowSize / 2);
   }
   return Vec2I::round((scale * Vec3F(position, 0)).vec2());
 }
