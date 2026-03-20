@@ -1,4 +1,6 @@
 #include "StarCanvasWidget.hpp"
+#include "StarRoot.hpp"
+#include "StarTranslationDatabase.hpp"
 
 namespace Star {
 
@@ -68,6 +70,13 @@ void CanvasWidget::drawTriangles(List<tuple<Vec2F, Vec2F, Vec2F>> const& triangl
 }
 
 void CanvasWidget::drawText(String s, TextPositioning position, unsigned fontSize, Vec4B const& color, FontMode mode, float lineSpacing, String font, String processingDirectives) {
+  // Translate text at draw time
+  if (auto* root = Root::singletonPtr()) {
+    if (auto db = root->translationDatabase()) {
+      if (auto trans = db->translate(s))
+        s = std::move(*trans);
+    }
+  }
   TextStyle style;
   style.fontSize = fontSize;
   style.color = color;
@@ -79,6 +88,13 @@ void CanvasWidget::drawText(String s, TextPositioning position, unsigned fontSiz
 }
 
 void CanvasWidget::drawText(String s, TextPositioning position, TextStyle style) {
+  // Translate text at draw time
+  if (auto* root = Root::singletonPtr()) {
+    if (auto db = root->translationDatabase()) {
+      if (auto trans = db->translate(s))
+        s = std::move(*trans);
+    }
+  }
   m_renderOps.append(make_tuple(std::move(s), std::move(position), std::move(style)));
 }
 

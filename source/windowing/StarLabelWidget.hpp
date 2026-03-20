@@ -37,6 +37,7 @@ private:
   void updateTextRegion();
 
   String m_text;
+  Maybe<String> m_translatedText;
   TextStyle m_style;
   HorizontalAnchor m_hAnchor;
   VerticalAnchor m_vAnchor;

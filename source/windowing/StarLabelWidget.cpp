@@ -1,6 +1,8 @@
 #include "StarLabelWidget.hpp"
 #include "StarRoot.hpp"
 #include "StarAssets.hpp"
+#include "StarTranslationDatabase.hpp"
+#include "StarText.hpp"
 
 namespace Star {
 
@@ -31,6 +33,14 @@ Maybe<unsigned> LabelWidget::getTextCharLimit() const {
 
 void LabelWidget::setText(String newText) {
   m_text = std::move(newText);
+  // Translate text for display
+  m_translatedText = {};
+  if (auto* root = Root::singletonPtr()) {
+    if (auto db = root->translationDatabase()) {
+      if (auto trans = db->translate(m_text))
+        m_translatedText = std::move(*trans);
+    }
+  }
   updateTextRegion();
 }
 
@@ -89,12 +99,14 @@ RectI LabelWidget::getScissorRect() const {
 
 void LabelWidget::renderImpl() {
   context()->setTextStyle(m_style);
-  context()->renderInterfaceText(m_text, {Vec2F(screenPosition()), m_hAnchor, m_vAnchor, m_wrapWidth, m_textCharLimit});
+  String const& displayText = m_translatedText ? *m_translatedText : m_text;
+  context()->renderInterfaceText(displayText, {Vec2F(screenPosition()), m_hAnchor, m_vAnchor, m_wrapWidth, m_textCharLimit});
 }
 
 void LabelWidget::updateTextRegion() {
   context()->setTextStyle(m_style);
-  m_textRegion = RectI(context()->determineInterfaceTextSize(m_text, {Vec2F(), m_hAnchor, m_vAnchor, m_wrapWidth, m_textCharLimit}));
+  String const& displayText = m_translatedText ? *m_translatedText : m_text;
+  m_textRegion = RectI(context()->determineInterfaceTextSize(displayText, {Vec2F(), m_hAnchor, m_vAnchor, m_wrapWidth, m_textCharLimit}));
   setSize(m_textRegion.size());
 }
 
