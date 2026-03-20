@@ -52,6 +52,7 @@
 #include "StarSpawnTypeDatabase.hpp"
 #include "StarRadioMessageDatabase.hpp"
 #include "StarCollectionDatabase.hpp"
+#include "StarTranslationDatabase.hpp"
 
 namespace Star {
 
@@ -295,6 +296,7 @@ void Root::reload() {
     m_spawnTypeDatabase.reset();
     m_radioMessageDatabase.reset();
     m_collectionDatabase.reset();
+    m_translationDatabase.reset();
     m_assets.reset();
     m_configuration.reset();
   }
@@ -586,6 +588,10 @@ RadioMessageDatabaseConstPtr Root::radioMessageDatabase() {
 
 CollectionDatabaseConstPtr Root::collectionDatabase() {
   return loadMember(m_collectionDatabase, m_collectionDatabaseMutex, "CollectionDatabase");
+}
+
+TranslationDatabaseConstPtr Root::translationDatabase() {
+  return loadMember(m_translationDatabase, m_translationDatabaseMutex, "TranslationDatabase");
 }
 
 Root::Settings& Root::settings() {

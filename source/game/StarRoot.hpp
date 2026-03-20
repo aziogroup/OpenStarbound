@@ -46,6 +46,7 @@ STAR_CLASS(DanceDatabase);
 STAR_CLASS(SpawnTypeDatabase);
 STAR_CLASS(RadioMessageDatabase);
 STAR_CLASS(CollectionDatabase);
+STAR_CLASS(TranslationDatabase);
 
 STAR_CLASS(Root);
 
@@ -184,6 +185,7 @@ public:
   SpawnTypeDatabaseConstPtr spawnTypeDatabase();
   RadioMessageDatabaseConstPtr radioMessageDatabase();
   CollectionDatabaseConstPtr collectionDatabase();
+  TranslationDatabaseConstPtr translationDatabase();
 
   Settings& settings();
 
@@ -331,6 +333,9 @@ private:
 
   CollectionDatabasePtr m_collectionDatabase;
   Mutex m_collectionDatabaseMutex;
+
+  TranslationDatabasePtr m_translationDatabase;
+  Mutex m_translationDatabaseMutex;
 };
 
 }

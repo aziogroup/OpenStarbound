@@ -1,5 +1,6 @@
 #include "StarTextPainter.hpp"
 #include "StarJsonExtra.hpp"
+#include "StarTranslationDatabase.hpp"
 
 namespace Star {
 
@@ -46,24 +47,46 @@ TextPainter::TextPainter(RendererPtr renderer, TextureGroupPtr textureGroup)
 }
 
 RectF TextPainter::renderText(StringView s, TextPositioning const& position) {
+  String translated;
+  StringView renderStr = s;
+  if (auto* root = Root::singletonPtr()) {
+    if (auto db = root->translationDatabase()) {
+      if (auto trans = db->translate(s)) {
+        translated = std::move(*trans);
+        renderStr = StringView(translated);
+      }
+    }
+  }
+
   RectF rect;
   if (position.charLimit) {
     unsigned charLimit = *position.charLimit;
-    rect = doRenderText(s, position, true, &charLimit);
+    rect = doRenderText(renderStr, position, true, &charLimit);
   } else {
-    rect = doRenderText(s, position, true, nullptr);
+    rect = doRenderText(renderStr, position, true, nullptr);
   }
   renderPrimitives();
   return rect;
 }
 
 RectF TextPainter::renderLine(StringView s, TextPositioning const& position) {
+  String translated;
+  StringView renderStr = s;
+  if (auto* root = Root::singletonPtr()) {
+    if (auto db = root->translationDatabase()) {
+      if (auto trans = db->translate(s)) {
+        translated = std::move(*trans);
+        renderStr = StringView(translated);
+      }
+    }
+  }
+
   RectF rect;
   if (position.charLimit) {
     unsigned charLimit = *position.charLimit;
-    rect = doRenderLine(s, position, true, &charLimit);
+    rect = doRenderLine(renderStr, position, true, &charLimit);
   } else {
-    rect = doRenderLine(s, position, true, nullptr);
+    rect = doRenderLine(renderStr, position, true, nullptr);
   }
   renderPrimitives();
   return rect;
@@ -76,11 +99,31 @@ RectF TextPainter::renderGlyph(String::Char c, TextPositioning const& position) 
 }
 
 RectF TextPainter::determineTextSize(StringView s, TextPositioning const& position) {
-  return doRenderText(s, position, false, nullptr);
+  String translated;
+  StringView measureStr = s;
+  if (auto* root = Root::singletonPtr()) {
+    if (auto db = root->translationDatabase()) {
+      if (auto trans = db->translate(s)) {
+        translated = std::move(*trans);
+        measureStr = StringView(translated);
+      }
+    }
+  }
+  return doRenderText(measureStr, position, false, nullptr);
 }
 
 RectF TextPainter::determineLineSize(StringView s, TextPositioning const& position) {
-  return doRenderLine(s, position, false, nullptr);
+  String translated;
+  StringView measureStr = s;
+  if (auto* root = Root::singletonPtr()) {
+    if (auto db = root->translationDatabase()) {
+      if (auto trans = db->translate(s)) {
+        translated = std::move(*trans);
+        measureStr = StringView(translated);
+      }
+    }
+  }
+  return doRenderLine(measureStr, position, false, nullptr);
 }
 
 RectF TextPainter::determineGlyphSize(String::Char c, TextPositioning const& position) {
@@ -430,6 +473,9 @@ RectF TextPainter::doRenderLine(StringView text, TextPositioning const& position
   RectF bounds = RectF::withSize(pos.pos, Vec2F());
   Text::TextCallback textCallback = [&](StringView text) {
     for (String::Char c : text) {
+      // Skip C1 control characters (U+0080-U+009F) - indicates encoding corruption
+      if (c >= 0x80 && c <= 0x9F)
+        continue;
       if (charLimit) {
         if (*charLimit == 0)
           return false;

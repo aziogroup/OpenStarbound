@@ -150,6 +150,7 @@ SET (star_game_HEADERS
     StarTileSectorArray.hpp
     StarTilesetDatabase.hpp
     StarToolUser.hpp
+    StarTranslationDatabase.hpp
     StarTreasure.hpp
     StarUniverseClient.hpp
     StarUniverseConnection.hpp
@@ -416,6 +417,7 @@ SET (star_game_SOURCES
     StarTileModification.cpp
     StarTilesetDatabase.cpp
     StarToolUser.cpp
+    StarTranslationDatabase.cpp
     StarTreasure.cpp
     StarUniverseClient.cpp
     StarUniverseConnection.cpp
